@@ -51,5 +51,5 @@ jobs:
           $version = (Get-Item ./dist/xiaonasen.exe).VersionInfo.FileVersion.Split('.')[0..2] -join '.'
           if ($env:RELEASE_TAG -ne "v$version") { throw 'Tag and application version do not match' }
           $assets = @((Get-ChildItem ./artifacts -Filter '*.zip').FullName) + @((Resolve-Path ./artifacts/SHA256SUMS.txt).Path)
-          gh release create $env:RELEASE_TAG @assets --repo $env:REPO_NAME --verify-tag --title "小纳森 $version" --notes-file ./docs/RELEASE_NOTES.md
+          gh release create $env:RELEASE_TAG @assets --repo $env:REPO_NAME --verify-tag --title "小纳森 · Xiaonasen $version" --notes-file ./docs/RELEASE_NOTES.md
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }

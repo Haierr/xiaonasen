@@ -13,3 +13,16 @@
 - 按需启动本地模型、空闲卸载、退出时清理自有引擎。
 - 公开版默认系统麦克风与可移植模型路径。
 - 固定运行资源版本、下载校验、源码构建和轻量打包脚本。
+
+### English
+
+First public release of **Xiaonasen · 小纳森**.
+
+- Native Windows dictation with live Chinese previews, conservative cleanup and vocabulary assistance.
+- Ctrl+R starts/stops recording; T switches Chinese output / English translation while recording.
+- Mouse pass-through with temporary Alt interaction.
+- Anime coffee circle, smooth 340 ms transitions and five-second idle collapse.
+- Metallic themes, custom colors, opacity, scale, corners, placement and monitor selection.
+- Local models loaded on demand, unloaded when idle, and cleaned up on exit.
+- Automatic insertion without pressing Enter, default system microphone and portable model paths.
+- Pinned runtime resources, SHA-256 verification, source builds and lightweight packaging.
