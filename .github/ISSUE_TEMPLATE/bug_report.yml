@@ -1,0 +1,27 @@
+name: 问题反馈
+description: 报告小纳森使用或构建问题
+body:
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境
+      description: 程序版本、Windows 版本、显卡/驱动以及所用麦克风类型。不要填写序列号或其他私人信息。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: 预期与实际结果
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: 可选截图或诊断
+      description: 分享前移除录音内容、个人路径、密钥和其他敏感信息。

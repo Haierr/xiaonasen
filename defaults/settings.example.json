@@ -1,0 +1,23 @@
+{
+  "ModelRoot": "runtime",
+  "Microphone": "",
+  "Polish": true,
+  "AutoPaste": true,
+  "EnglishOutput": false,
+  "UnloadSeconds": 30,
+  "Look": {
+    "Preset": "Champagne",
+    "Background": "#202123",
+    "Text": "#F1ECE1",
+    "Accent": "#D0B37B",
+    "Border": "#615642",
+    "Opacity": 94,
+    "Scale": 92,
+    "Radius": 16,
+    "Margin": 20,
+    "Position": "TopLeft",
+    "Screen": "Current",
+    "X": 20,
+    "Y": 20
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "engine": {
+    "version": "b10034",
+    "url": "https://github.com/ggml-org/llama.cpp/releases/download/b10034/llama-b10034-bin-win-vulkan-x64.zip",
+    "sha256": "321762b793c299a841ce46dabca26f9018aa49a0d45490a569890622b8354db9",
+    "serverSha256": "05db01f06449ddf2ac178efb761e5229b9e097170fae81ee08ee3a2dbe1fd976"
+  },
+  "files": [
+    {
+      "path": "polish_lora/multi-lora.gguf",
+      "url": "https://raw.githubusercontent.com/frankzch/Saymore/eacb338353820358a033aebe0b43bc59e07ee6cc/polish_lora/multi-lora.gguf",
+      "sha256": ["2d0b58ee6ca066b81849250fed2dfd80e00e4bd494c3386e84dc794e5d8b22f6"],
+      "model": false
+    },
+    {
+      "path": "polish_lora/basic_prompt.txt",
+      "url": "https://raw.githubusercontent.com/frankzch/Saymore/eacb338353820358a033aebe0b43bc59e07ee6cc/polish_lora/basic_prompt.txt",
+      "sha256": ["5b41131a6ac9770545c8a4423a9287af667c9ccb450a64e40d5bc49e5bd41ce3","4198d6b0808c0cb6ed0ac877a3bbe848f5dbf1e634d88f23375c87b3ecdb4f9e"],
+      "model": false
+    },
+    {
+      "path": "models/Qwen3-ASR-1.7B-GGUF/Qwen3-ASR-1.7B-IQ4_NL.gguf",
+      "url": "https://modelscope.cn/api/v1/models/frankzch/Qwen3-ASR-1.7B-GGUF/repo?Revision=master&FilePath=Qwen3-ASR-1.7B-IQ4_NL.gguf",
+      "sha256": ["62dd780b5e0d44921a4fea2e226577e21a5220b73ceedb2510d0e1038ae53882"],
+      "model": true
+    },
+    {
+      "path": "models/Qwen3-ASR-1.7B-GGUF/mmproj-Qwen3-ASR-1.7B-Q8_0.gguf",
+      "url": "https://modelscope.cn/api/v1/models/frankzch/Qwen3-ASR-1.7B-GGUF/repo?Revision=master&FilePath=mmproj-Qwen3-ASR-1.7B-Q8_0.gguf",
+      "sha256": ["46c1d533af3f354ceb37ce855dbceff7da7fa7cf1e6a523df3b13440bd164c0d"],
+      "model": true
+    }
+  ]
+}

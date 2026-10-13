@@ -1,0 +1,66 @@
+小纳森
+Windows
+Windows 11
+Microsoft
+Edge
+Chrome
+GitHub
+Git
+VS Code
+Visual Studio
+PowerShell
+Python
+JavaScript
+TypeScript
+Node.js
+React
+Rust
+Tauri
+Docker
+API
+SDK
+UI
+UX
+CPU
+GPU
+RAM
+SSD
+USB
+Wi-Fi
+Bluetooth
+HTTP
+HTTPS
+URL
+JSON
+HTML
+CSS
+OCR
+ASR
+LLM
+LoRA
+GGUF
+Vulkan
+Qwen
+Qwen3-ASR
+Hugging Face
+ModelScope
+ChatGPT
+GPT
+OpenAI
+Codex
+Claude
+Claude Code
+Anthropic
+Gemini
+Grok
+DeepSeek
+Cursor
+MCP
+ONNX
+WebView2
+Saymore
+通义千问
+语音识别
+专有名词
+快捷键
+实时预览
