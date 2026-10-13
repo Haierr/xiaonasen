@@ -1,5 +1,7 @@
 # 验证说明
 
+**简体中文** · [English](TESTING.en.md)
+
 ## 模型无关检查
 
 `scripts/test.ps1` 编译后的应用会分别启动独立检查进程：

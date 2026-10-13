@@ -1,5 +1,7 @@
 # 参与开发
 
+**简体中文** · [English](CONTRIBUTING.en.md)
+
 在 Windows x64 上构建，需 .NET Framework 4.8。源码入口为 `src/SaymoreLite.cs`，保持原生依赖和按需模型加载。
 
 ```powershell

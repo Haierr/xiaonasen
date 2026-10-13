@@ -1,5 +1,7 @@
 # 来源与第三方资源
 
+**简体中文** · [English](THIRD_PARTY_NOTICES.en.md)
+
 小纳森的原生 C# 界面、录音、快捷键、鼠标穿透、动画和粘贴流程由本项目维护。
 
 ASR 请求协议、LoRA 调用约定和保守整理思路参考 [frankzch/Saymore v1.2.0](https://github.com/frankzch/Saymore/tree/v1.2.0)，固定提交 `eacb338353820358a033aebe0b43bc59e07ee6cc`。保留其版权声明与 [MIT 许可](licenses/Saymore-MIT.txt)。本项目不是 Saymore 官方发行版。

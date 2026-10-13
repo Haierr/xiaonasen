@@ -1,12 +1,33 @@
-<p align="center"><img src="assets/coffee-logo.png" width="104" alt="小纳森咖啡图标"></p>
+<p align="center"><img src="assets/coffee-logo.png" width="82" alt="小纳森 · Xiaonasen"></p>
+
+<p align="center"><strong>简体中文</strong> · <a href="README.en.md">English</a></p>
+
+<p align="center"><img src="assets/hero.svg" width="100%" alt="小纳森 · Xiaonasen — 说得自然，写得轻松。Speak naturally. Write effortlessly."></p>
+
+<p align="center">
+  <a href="https://github.com/Haierr/xiaonasen/releases/latest"><img src="https://img.shields.io/github/v/release/Haierr/xiaonasen?style=flat-square&amp;label=release&amp;color=ceb17a" alt="Latest release"></a>
+  <a href="https://github.com/Haierr/xiaonasen/actions/workflows/windows.yml"><img src="https://github.com/Haierr/xiaonasen/actions/workflows/windows.yml/badge.svg" alt="Windows build and checks"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-ceb17a?style=flat-square" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/platform-Windows%20x64-6d7780?style=flat-square" alt="Windows x64">
+</p>
+
+<p align="center"><a href="https://github.com/Haierr/xiaonasen/releases/latest"><strong>下载小纳森 · Download Xiaonasen</strong></a> &nbsp; / &nbsp; <a href="#安装">快速开始</a> &nbsp; / &nbsp; <a href="README.en.md#get-started">English guide</a></p>
 
 # 小纳森 · Xiaonasen
 
 轻量、本地的 Windows 中文语音输入。按 **Ctrl+R** 开始说话，整理后直接填入原输入框；录音中按 **T**，把中文口述翻译成英文。
 
-Native Windows dictation with local speech recognition, live preview, optional Chinese-to-English output, and a small coffee overlay. No Python or WebView is required for the app itself.
+一枚小咖啡，一次快捷键，让口述变成文字。原生 Windows 界面，本地识别与整理，中文口述也可以写成英文。
 
-![录音界面示例](docs/recording-demo.png)
+## 一眼了解
+
+| 轻巧地留在桌面 | 看得见的收音反馈 | 说中文，写英文 |
+| --- | --- | --- |
+| 待机圆圈 · 平滑展开 · 5 秒收回 | 音量波形 · 状态提示 · 中文预览 | 录音时按 T · 结束后翻译并填入 |
+
+<p align="center"><img src="docs/recording-demo.png" width="440" alt="小纳森 · Xiaonasen 的录音界面示例"></p>
+
+<p align="center"><sub>界面示例 · UI preview</sub></p>
 
 ## 功能
 
@@ -86,3 +107,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-runtime.ps1
 ## 来源与许可
 
 MIT。ASR 协议与文字整理能力参考 [Saymore v1.2.0](https://github.com/frankzch/Saymore/tree/v1.2.0)，保留 frankzch 的版权与许可。本项目使用 Qwen3-ASR、Saymore 的整理 LoRA 和 llama.cpp，资源按各自上游许可使用。咖啡图案为 AI 生成素材，提示词保存在 `assets/coffee-prompt.txt`。[第三方说明](THIRD_PARTY_NOTICES.md)。
+
+---
+
+<p align="center"><strong>小纳森 · Xiaonasen</strong><br>说得自然，写得轻松。<br><a href="README.en.md">Read the complete English guide →</a></p>
