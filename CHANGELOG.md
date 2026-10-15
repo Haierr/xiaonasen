@@ -1,5 +1,10 @@
 # 更新记录
 
+## 1.2.3
+
+- 正在录音时，麦克风按钮和外圈显示红色；结束或取消后恢复主题颜色。
+- The microphone button and ring turn red while recording and return to theme colors on stop or cancel.
+
 ## 1.2.2
 
 - 录音期间增量识别并保留已完成段落，停止后只补未识别的尾段。

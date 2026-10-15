@@ -20,7 +20,7 @@ using System.Windows.Forms;
 [assembly:AssemblyTitle("小纳森")]
 [assembly:AssemblyProduct("小纳森")]
 [assembly:AssemblyDescription("小纳森 · 轻量语音输入")]
-[assembly:AssemblyVersion("1.2.2.0")]
+[assembly:AssemblyVersion("1.2.3.0")]
 namespace SaymoreLite {
 static class Program {
     public static readonly string Home = AppDomain.CurrentDomain.BaseDirectory;
@@ -465,11 +465,13 @@ class PillButton : Button {
     protected override void OnPaint(PaintEventArgs e){
         var g=e.Graphics;g.SmoothingMode=SmoothingMode.AntiAlias;g.Clear(Parent.BackColor);
         if(Microphone){
-            Color color=Drawing.Mix(Parent.BackColor,Accent,Listening?0.32f+Activity*0.23f:0.16f);
+            Color tint=Listening?Color.FromArgb(220,75,88):Accent;
+            Color color=Drawing.Mix(Parent.BackColor,tint,Listening?0.70f+Activity*0.12f:0.16f);
             if(hover)color=ControlPaint.Light(color,0.15f);
-            if(Listening)using(var halo=new Pen(Color.FromArgb(60+(int)(Activity*80),Accent),2))g.DrawEllipse(halo,2,2,Width-5,Height-5);
-            using(var brush=new LinearGradientBrush(new Rectangle(6,6,Width-12,Height-12),Drawing.Mix(color,Accent,0.12f),color,45f))g.FillEllipse(brush,6,6,Width-12,Height-12);
-            using(var pen=new Pen(ForeColor,2.2f))using(var brush=new SolidBrush(ForeColor)){
+            if(Listening)using(var halo=new Pen(Color.FromArgb(60+(int)(Activity*80),tint),2))g.DrawEllipse(halo,2,2,Width-5,Height-5);
+            using(var brush=new LinearGradientBrush(new Rectangle(6,6,Width-12,Height-12),Drawing.Mix(color,tint,0.12f),color,45f))g.FillEllipse(brush,6,6,Width-12,Height-12);
+            Color iconColor=Listening?Color.FromArgb(255,240,240):ForeColor;
+            using(var pen=new Pen(iconColor,2.2f))using(var brush=new SolidBrush(iconColor)){
                 float x=Width/2f,y=Height/2f;
                 if(Text=="■")g.FillRectangle(brush,x-6,y-6,12,12);
                 else if(Text=="×"){g.DrawLine(pen,x-6,y-6,x+6,y+6);g.DrawLine(pen,x+6,y-6,x-6,y+6);}
@@ -758,7 +760,7 @@ class DictationForm : Form {
                 warming=engine.Ready(operation.Token);liveCancel=CancellationTokenSource.CreateLinkedTokenSource(operation.Token);liveTask=LivePreview(audio,warming,transcript,session,liveCancel.Token);
             }catch(Exception ex){ReleaseLanguageKey();if(audio!=null){audio.Dispose();audio=null;}if(operation!=null){operation.Dispose();operation=null;}recording=false;UpdateMode();ScheduleCollapse();Program.Log(ex);SetState("无法开始录音",ex.Message);}return;
         }
-        recording=false;ReleaseLanguageKey();busy=true;UpdateMode();microphone.Text="×";microphone.AccessibleName="立即取消处理";microphone.Listening=false;wave.Listening=false;wave.Thinking=true;timer.Interval=80;IntPtr destination=target;
+        recording=false;ReleaseLanguageKey();busy=true;UpdateMode();microphone.Text="×";microphone.AccessibleName="立即取消处理";microphone.Listening=false;microphone.Invalidate();wave.Listening=false;wave.Thinking=true;timer.Interval=80;IntPtr destination=target;
         int version=session;var current=operation;var token=current.Token;var capture=audio;audio=null;var ready=warming;var cache=transcript;
         try{
             SetState("正在识别","Ctrl+E 或 × 立即取消");
