@@ -7,7 +7,7 @@ Build on Windows x64 with .NET Framework 4.8. The source entry point is `src/Say
 ```powershell
 .\build.ps1
 .\scripts\test.ps1
-# Interactive desktop required; exit the running app to release Ctrl+R
+# Interactive desktop required; exit the running app to release Ctrl+E
 .\scripts\test.ps1 -Interactive -Stress
 # Complete runtime, microphone, and local Chinese SAPI voice required
 .\scripts\test.ps1 -WithRuntime

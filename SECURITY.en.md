@@ -6,4 +6,4 @@ Recognition, cleanup, and translation access the local loopback server. Resource
 
 Use **Security → Report a vulnerability** when available. Do not post secrets, private recordings, or sensitive exploit details in public issues. Use ordinary issues for non-security bugs.
 
-Version 1.2.3 is currently maintained. The project has not undergone an independent security audit and is not code-signed. Verify download sources and SHA-256, and keep system protections enabled.
+Version 1.2.4 is currently maintained. The project has not undergone an independent security audit and is not code-signed. Verify download sources and SHA-256, and keep system protections enabled.

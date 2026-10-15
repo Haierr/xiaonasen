@@ -11,7 +11,7 @@ $name = "xiaonasen-$version-windows-x64"
 $staging = Join-Path $output ($name+'-staging-'+[Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $staging -Force | Out-Null
 # Explicit allowlist: never package personal settings, test text, logs or models.
-foreach ($file in @('xiaonasen.exe','coffee-logo.png','coffee.ico','coffee-prompt.txt','hero.svg','settings.example.json','README.md','README.en.md','LICENSE','THIRD_PARTY_NOTICES.md','THIRD_PARTY_NOTICES.en.md','SECURITY.md','SECURITY.en.md','CHANGELOG.md')) {Copy-Item -LiteralPath (Join-Path $app $file) -Destination (Join-Path $staging $file)}
+foreach ($file in @('xiaonasen.exe','WebRtcVad.dll','coffee-logo.png','coffee.ico','coffee-prompt.txt','hero.svg','settings.example.json','README.md','README.en.md','LICENSE','THIRD_PARTY_NOTICES.md','THIRD_PARTY_NOTICES.en.md','SECURITY.md','SECURITY.en.md','CHANGELOG.md')) {Copy-Item -LiteralPath (Join-Path $app $file) -Destination (Join-Path $staging $file)}
 foreach ($guide in @('CONTRIBUTING.md','CONTRIBUTING.en.md')) {Copy-Item -LiteralPath (Join-Path $root $guide) -Destination (Join-Path $staging $guide)}
 foreach ($languageReadme in @('README.md','README.en.md')) {
     $readme = Join-Path $staging $languageReadme

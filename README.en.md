@@ -34,6 +34,7 @@ A small coffee on your desktop. Clear feedback while you speak. A native Windows
 - **A coffee when idle.** The small circle expands smoothly when recording starts and collapses after five idle seconds following completion.
 - **Incremental transcription.** The waveform follows microphone volume; completed speech segments are retained while you speak and reused when you stop.
 - **Chinese or English output.** Press T while recording to switch between cleaned Chinese and an English translation of your Chinese speech.
+- **No-speech filtering.** Local WebRTC voice activity detection rejects silence and common background noise. With no detected speech, clear the result, skip ASR, and never insert text. Vocabulary is no longer supplied directly to ASR to avoid prompt echo. Background voices may still count as speech.
 - **Fast cleanup.** Local rules remove standalone fillers and exactly repeated sentences, and normalize common technical names without another model pass. Optional AI cleanup has a 12-second total budget and preserves the source on timeout.
 - **Mouse pass-through.** Click the application behind the overlay. Hold Alt to interact with the overlay itself.
 - **Appearance customization.** Metallic themes, HEX colors, opacity, scale, corners, placement, and monitor selection.
@@ -44,7 +45,7 @@ A small coffee on your desktop. Clear feedback while you speak. A native Windows
 
 ## Get started
 
-You need Windows 10 / 11 x64, .NET Framework 4.8, a working microphone, and a writable application directory. The validated engine is llama.cpp b10034 for Windows Vulkan; GPU drivers need Vulkan support. CPU-only performance and compatibility should be checked on your device. Neither the repository nor the lightweight ZIP includes the approximately 1.5 GB ASR models.
+You need Windows 10 / 11 x64, .NET Framework 4.8, the [Microsoft Visual C++ x64 runtime](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist), a working microphone, and a writable application directory. The validated engine is llama.cpp b10034 for Windows Vulkan; GPU drivers need Vulkan support. CPU-only performance and compatibility should be checked on your device. Neither the repository nor the lightweight ZIP includes the approximately 1.5 GB ASR models.
 
 1. Download `xiaonasen-*-windows-x64.zip` from [Releases](https://github.com/Haierr/xiaonasen/releases), then extract it to a writable directory such as `D:\Xiaonasen`.
 2. Run the following in that directory:
@@ -122,7 +123,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-runtime.ps1
 ```
 
-The output is `dist/xiaonasen.exe`. The build uses the installed .NET Framework compiler with no NuGet dependencies. Packaging uses an explicit allowlist to exclude personal settings, logs, and models. See [Contributing](CONTRIBUTING.en.md) and [Security](SECURITY.en.md).
+The output is `dist/xiaonasen.exe`. The build uses the installed .NET Framework compiler. On first build, it obtains a pinned approximately 50 KB native WebRTC detector from NuGet and checks both package and DLL SHA-256; no additional managed runtime is required. Packaging uses an explicit allowlist to exclude personal settings, logs, and models. See [Contributing](CONTRIBUTING.en.md) and [Security](SECURITY.en.md).
 
 ## Credits and license
 

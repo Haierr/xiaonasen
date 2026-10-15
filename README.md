@@ -34,6 +34,7 @@
 - **小咖啡待机**：左上角圆圈，开始录音时平滑展开，完成后闲置 5 秒自动收回。
 - **边说边转写**：真实音量驱动波形，文字逐段更新；已完成段落直接复用，减少停止后的等待。
 - **中文 / 中→英**：录音时按 T 来回切换，结束时以最后选定的模式输出。
+- **无声拦截**：本地 WebRTC 语音活动检测过滤静音和常见底噪；没有检测到语音时清空本次结果、不调用识别、不自动填入。词表不再直接输入识别模型，避免被抄成口述文字。背景人声等仍可能被视为语音。
 - **快速整理**：默认本地规则移除独立口水词、完全重复的句子并规范常见术语，无第二次模型推理。可选 AI 精细整理，整次最多等待 12 秒，超时保留原文。
 - **鼠标穿透**：默认可点击浮窗后面的按钮；按住 Alt 临时操作浮窗。
 - **外观 DIY**：金属配色、透明度、大小、圆角、位置、多屏跟随。
@@ -42,7 +43,7 @@
 
 ## 安装
 
-需要 Windows 10 / 11 x64、.NET Framework 4.8，以及可用的系统麦克风。已验证的引擎为 llama.cpp b10034 Vulkan 版；显卡驱动需支持 Vulkan，纯 CPU 的速度和兼容性需按设备核对。源码和轻量发行包均不包含约 1.5 GB 的 ASR 模型。
+需要 Windows 10 / 11 x64、.NET Framework 4.8、[Microsoft Visual C++ x64 运行库](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist)及可用的系统麦克风。已验证的引擎为 llama.cpp b10034 Vulkan 版；显卡驱动需支持 Vulkan，纯 CPU 的速度和兼容性需按设备核对。源码和轻量发行包均不包含约 1.5 GB 的 ASR 模型。
 
 1. 从 [Releases](https://github.com/Haierr/xiaonasen/releases) 下载 `xiaonasen-*-windows-x64.zip`，解压到可写目录，例如 `D:\Xiaonasen`。
 2. 在解压目录运行：
@@ -104,7 +105,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-runtime.ps1
 ```
 
-输出为 `dist/xiaonasen.exe`。构建使用 Windows 自带 .NET Framework 编译器，无 NuGet 包依赖。`scripts/package.ps1` 使用明确的文件名单生成轻量 ZIP，避免把本地设置、日志或模型打包。[开发与测试](CONTRIBUTING.md)。
+输出为 `dist/xiaonasen.exe`。构建使用 Windows 自带 .NET Framework 编译器。首次构建从 NuGet 准备固定版本的约 50 KB 原生 WebRTC 检测库，并校验包和 DLL 的 SHA-256；应用不需要额外托管运行时。`scripts/package.ps1` 使用明确的文件名单生成轻量 ZIP，避免把本地设置、日志或模型打包。[开发与测试](CONTRIBUTING.md)。
 
 ## 来源与许可
 

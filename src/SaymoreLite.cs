@@ -20,7 +20,7 @@ using System.Windows.Forms;
 [assembly:AssemblyTitle("小纳森")]
 [assembly:AssemblyProduct("小纳森")]
 [assembly:AssemblyDescription("小纳森 · 轻量语音输入")]
-[assembly:AssemblyVersion("1.2.3.0")]
+[assembly:AssemblyVersion("1.2.4.0")]
 namespace SaymoreLite {
 static class Program {
     public static readonly string Home = AppDomain.CurrentDomain.BaseDirectory;
@@ -58,12 +58,15 @@ static class Program {
             UiTest=true;LifecycleTest=true;try{using(var form=new DictationForm()){form.Show();Application.DoEvents();form.ExerciseRecordingHotkeyForTest();}}catch(Exception ex){File.WriteAllText(Path.Combine(Home,"hotkey-test.txt"),ex.ToString());Environment.ExitCode=1;}return;
         }
         if(args.Length>0&&args[0]=="--reliability-test"){
-            UiTest=true;LifecycleTest=true;var form=new DictationForm(new ReliabilityEngine());
+            UiTest=true;LifecycleTest=true;var form=new DictationForm(new ReliabilityEngine(),bytes=>!Work.Quiet(bytes,0,bytes.Length));
             form.Shown+=async(s,e)=>{try{await form.ExerciseReliabilityForTest();}catch(Exception ex){File.WriteAllText(Path.Combine(Home,"reliability-test.txt"),ex.ToString());Environment.ExitCode=1;}finally{form.Close();}};
             Application.Run(form);form.Dispose();return;
         }
         if(args.Length>0&&args[0]=="--latency-test"){
             UiTest=true;LifecycleTest=true;var form=new DictationForm();form.Shown+=async(s,e)=>{try{await form.ExerciseLatencyForTest();}catch(Exception ex){File.WriteAllText(Path.Combine(Home,"latency-test.txt"),ex.ToString());Environment.ExitCode=1;}finally{form.Close();}};Application.Run(form);form.Dispose();return;
+        }
+        if(args.Length>0&&args[0]=="--silence-test"){
+            UiTest=true;LifecycleTest=true;var form=new DictationForm(new ReliabilityEngine());form.Shown+=async(s,e)=>{try{await form.ExerciseSilenceForTest();}catch(Exception ex){File.WriteAllText(Path.Combine(Home,"silence-test.txt"),ex.ToString());Environment.ExitCode=1;}finally{form.Close();}};Application.Run(form);form.Dispose();return;
         }
         if(args.Length>0&&args[0]=="--window-test"){
             try{using(var form=new DictationForm()){
@@ -339,6 +342,26 @@ static class Vocabulary {
         return text.Trim(' ','\r','\n','，','、');
     }
 }
+static class SpeechActivity {
+    [DllImport("WebRtcVad.dll",CallingConvention=CallingConvention.Cdecl)] static extern IntPtr Vad_Create();
+    [DllImport("WebRtcVad.dll",CallingConvention=CallingConvention.Cdecl)] static extern int Vad_Init(IntPtr handle);
+    [DllImport("WebRtcVad.dll",CallingConvention=CallingConvention.Cdecl)] static extern int Vad_SetMode(IntPtr handle,int mode);
+    [DllImport("WebRtcVad.dll",CallingConvention=CallingConvention.Cdecl)] static extern int Vad_Process(IntPtr handle,int rate,short[] frame,UIntPtr length);
+    [DllImport("WebRtcVad.dll",CallingConvention=CallingConvention.Cdecl)] static extern void Vad_Free(IntPtr handle);
+    public static bool Contains(byte[] pcm,int offset=0){
+        if(pcm.Length-offset<640)return false;
+        IntPtr vad=Vad_Create();if(vad==IntPtr.Zero)throw new IOException("语音检测初始化失败，已停止自动填入。");
+        try{
+            if(Vad_Init(vad)!=0||Vad_SetMode(vad,3)!=0)throw new IOException("语音检测不可用，已停止自动填入。");
+            var frame=new short[320];int voiced=0,run=0,longest=0;
+            for(int p=offset;p+640<=pcm.Length;p+=640){
+                Buffer.BlockCopy(pcm,p,frame,0,640);int result=Vad_Process(vad,16000,frame,new UIntPtr(320));if(result<0)throw new IOException("语音检测失败，已停止自动填入。");
+                if(result==1){voiced++;run++;longest=Math.Max(longest,run);}else run=0;
+            }
+            return voiced>=8&&longest>=6;
+        }finally{Vad_Free(vad);}
+    }
+}
 class TranscriptCache {
     public int Offset,PreviewEnd;public string PreviewText="";public bool InFlight;
     public readonly StringBuilder Confirmed=new StringBuilder();
@@ -389,7 +412,7 @@ class Engine : IDisposable {
     Process server; IntPtr job; public DateTime LastUse=DateTime.UtcNow;
     const string Url="http://127.0.0.1:18902";
     public bool Loaded {get {try{return server!=null && !server.HasExited;}catch{return false;}}}
-    public Engine(Settings config){this.config=config; client=new HttpClient(new HttpClientHandler {UseProxy=false}); client.Timeout=TimeSpan.FromSeconds(100);job=Native.MakeJob();}
+    public Engine(Settings config,HttpMessageHandler testHandler=null){this.config=config; client=new HttpClient(testHandler??new HttpClientHandler {UseProxy=false}); client.Timeout=TimeSpan.FromSeconds(100);job=Native.MakeJob();}
     static string Quote(string path){return "\""+path+"\"";}
     public virtual async Task Ready(CancellationToken cancel) {
         await gate.WaitAsync(cancel);
@@ -430,8 +453,9 @@ class Engine : IDisposable {
         }
     }
     public virtual Task<string> Transcribe(byte[] wav,CancellationToken token) {
-        string terms=Vocabulary.Context();
-        return Chat(new {messages=new object[]{new {role="system",content=terms},new {role="user",content=new object[]{new {type="input_audio",input_audio=new {data=Convert.ToBase64String(wav),format="wav"}}}},new {role="assistant",content="language Chinese<asr_text>"}},temperature=0,max_tokens=1024,lora=new[]{new{id=0,scale=0.0}}},token);
+        token.ThrowIfCancellationRequested();if(!SpeechActivity.Contains(wav,44))return Task.FromResult("");
+        // ASR gets audio only. A vocabulary list in its prompt can be hallucinated as speech.
+        return Chat(new {messages=new object[]{new {role="system",content=""},new {role="user",content=new object[]{new {type="input_audio",input_audio=new {data=Convert.ToBase64String(wav),format="wav"}}}},new {role="assistant",content="language Chinese<asr_text>"}},temperature=0,max_tokens=1024,lora=new[]{new{id=0,scale=0.0}}},token);
     }
     public virtual async Task<string> Polish(string raw,CancellationToken token) {
         string path=Path.Combine(config.ModelRoot,"polish_lora","basic_prompt.txt");
@@ -508,7 +532,7 @@ class SoundWave : Control {
     }
 }
 class DictationForm : Form {
-    readonly Settings config;readonly Engine engine;readonly NotifyIcon tray;readonly System.Windows.Forms.Timer timer;
+    readonly Settings config;readonly Engine engine;readonly Func<byte[],bool> hasSpeech;readonly NotifyIcon tray;readonly System.Windows.Forms.Timer timer;
     readonly PillButton microphone,copy,gear,close,mode,diy;readonly Label status,title,detail,previewTitle,shortcutLabel;readonly TextBox preview;readonly SoundWave wave;int activeHotkeyId=1;
     string ShortcutText {get{return config.RecordingShortcut;}}
     Color bg=Color.FromArgb(31,32,34),fg=Color.FromArgb(241,236,225),muted=Color.FromArgb(162,156,144),accent=Color.FromArgb(208,179,123),border=Color.FromArgb(94,83,62),surface;
@@ -521,8 +545,8 @@ class DictationForm : Form {
     AudioCapture audio;Task warming,liveTask;TranscriptCache transcript;CancellationTokenSource operation,liveCancel;int session;bool busy,recording,closing,expanded,registered,recordEnglish,languageKeyRegistered;DateTime recordStart,lastSound;IntPtr target;float visualLevel;
     protected override bool ShowWithoutActivation{get{return !Program.UiTest;}}
     protected override CreateParams CreateParams{get{var p=base.CreateParams;p.ClassStyle|=0x20000;if(!Program.UiTest)p.ExStyle|=0x080800A0;return p;}}
-    public DictationForm(Engine testEngine=null){
-        config=Settings.Load();engine=testEngine??new Engine(config);AutoScaleMode=AutoScaleMode.None;Text="小纳森";Name="SaymoreLite";Font=new Font("Microsoft YaHei UI",9.5f);ForeColor=fg;BackColor=bg;FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=Program.UiTest;TopMost=true;ClientSize=new Size(438,166);StartPosition=FormStartPosition.Manual;DoubleBuffered=true;
+    public DictationForm(Engine testEngine=null,Func<byte[],bool> testSpeechDetector=null){
+        config=Settings.Load();engine=testEngine??new Engine(config);hasSpeech=testSpeechDetector??(bytes=>SpeechActivity.Contains(bytes));AutoScaleMode=AutoScaleMode.None;Text="小纳森";Name="SaymoreLite";Font=new Font("Microsoft YaHei UI",9.5f);ForeColor=fg;BackColor=bg;FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=Program.UiTest;TopMost=true;ClientSize=new Size(438,166);StartPosition=FormStartPosition.Manual;DoubleBuffered=true;
         var area=Screen.FromPoint(Cursor.Position).WorkingArea;Location=new Point(area.Right-Width-28,area.Bottom-Height-28);
         title=new Label{Text="小纳森",Font=new Font("Microsoft YaHei UI",11,FontStyle.Bold),Location=new Point(24,18),Size=new Size(72,25),ForeColor=fg};Controls.Add(title);
         shortcutLabel=new Label{Text=ShortcutText,ForeColor=muted,Location=new Point(100,21),Size=new Size(125,22),Font=new Font("Segoe UI",8)};Controls.Add(shortcutLabel);
@@ -738,13 +762,12 @@ class DictationForm : Form {
     }
     async Task UpdateIncremental(TranscriptCache cache,byte[] bytes,bool stable,CancellationToken token){
         if(stable){int length=Work.CommitBoundary(bytes);Array.Resize(ref bytes,length);}
-        string text="";cache.InFlight=true;
-        try{if(!Work.Quiet(bytes,0,bytes.Length))text=Vocabulary.QuickClean(await Work.UntilCanceled(engine.Transcribe(AudioCapture.Wave(bytes),token),token));token.ThrowIfCancellationRequested();}
+        string text="";bool speech=hasSpeech(bytes);cache.InFlight=true;
+        try{if(speech)text=Vocabulary.QuickClean(await Work.UntilCanceled(engine.Transcribe(AudioCapture.Wave(bytes),token),token));token.ThrowIfCancellationRequested();}
         finally{cache.InFlight=false;}
-        if(stable){if(string.IsNullOrWhiteSpace(text)&&!Work.Quiet(bytes,0,bytes.Length))throw new IOException("本段未识别到文字，结束后重试完整转写。");cache.Commit(bytes.Length,text);}
+        if(stable){if(string.IsNullOrWhiteSpace(text)&&speech)throw new IOException("本段未识别到文字，结束后重试完整转写。");cache.Commit(bytes.Length,text);}
         else{cache.PreviewEnd=cache.Offset+bytes.Length;cache.PreviewText=text;}
     }
-    static double Energy(byte[] pcm){double sum=0;for(int i=0;i+1<pcm.Length;i+=2){double v=(short)(pcm[i]|(pcm[i+1]<<8))/32768.0;sum+=v*v;}return pcm.Length<2?0:Math.Sqrt(sum/(pcm.Length/2));}
     async Task StopPreview(CancellationToken token){
         var cancel=liveCancel;var task=liveTask;liveCancel=null;liveTask=null;
         if(task!=null&&transcript!=null&&transcript.InFlight)await Task.WhenAny(task,Task.Delay(350,token));
@@ -766,6 +789,7 @@ class DictationForm : Form {
             SetState("正在识别","Ctrl+E 或 × 立即取消");
             byte[] pcm=await Work.UntilCanceled(Task.Run(()=>{try{return capture.Stop();}finally{capture.Dispose();}}),token);
             capture=null;
+            if(!hasSpeech(pcm)){current.Cancel();engine.Stop();await StopPreview(CancellationToken.None);Work.Observe(ready);if(!closing&&version==session){preview.Text="";copy.Visible=false;SetState("没有检测到说话","已忽略背景声，没有填入文字");}return;}
             await StopPreview(token);await Work.UntilCanceled(ready,token);
             await ProcessRecording(pcm,destination,version,token,cache);
         }catch(OperationCanceledException){if(!closing&&version==session)SetState("已取消","按 Ctrl+E 重新开始");}
@@ -775,14 +799,14 @@ class DictationForm : Form {
     void ResetSession(){busy=false;recording=false;warming=null;microphone.Text="●";microphone.AccessibleName="开始或停止录音";microphone.Listening=false;wave.Listening=false;wave.Thinking=false;wave.Level=0;microphone.Invalidate();timer.Interval=200;UpdateShortcutHints();}
     async Task ProcessRecording(byte[] pcm,IntPtr destination,int version,CancellationToken token,TranscriptCache cache=null){
         if(pcm.Length<6400){SetState("录音太短","按 Ctrl+E 再试一次");return;}
-        if((cache==null||string.IsNullOrWhiteSpace(cache.Text))&&Energy(pcm)<0.0008){SetState("没有收到声音","检查麦克风连接，或在设置中更换");return;}
+        if(!hasSpeech(pcm)){preview.Text="";copy.Visible=false;SetState("没有检测到说话","已忽略背景声，没有填入文字");return;}
         int offset=0;string cached=cache==null?"":cache.Reuse(pcm,out offset);
         if(offset<0||offset>pcm.Length)throw new InvalidOperationException("录音缓存范围无效，请重新录音。");
         var recognized=new StringBuilder(cached);int index=0;preview.Text=cached;previewTitle.Text="正在补全末尾";
         var remaining=new byte[pcm.Length-offset];Buffer.BlockCopy(pcm,offset,remaining,0,remaining.Length);
         foreach(byte[] audioPart in Work.AudioParts(remaining)){
             token.ThrowIfCancellationRequested();SetState("正在识别 · 第 "+(++index)+" 段","Ctrl+E 或 × 立即取消");
-            if(Energy(audioPart)<0.0008)continue;
+            if(!hasSpeech(audioPart))continue;
             await Work.UntilCanceled(engine.Ready(token),token);
             string part=await Work.UntilCanceled(engine.Transcribe(AudioCapture.Wave(audioPart),token),token);
             token.ThrowIfCancellationRequested();if(closing||version!=session)return;
@@ -938,10 +962,40 @@ class DictationForm : Form {
         if(Regex.Matches(before,"订单").Count<4||Regex.Matches(preview.Text,"订单").Count<4)throw new Exception("Latency fixture lost repeated speech");
         File.WriteAllText(Path.Combine(Program.Home,"latency-test.txt"),"Synthetic speech duration: "+(pcm.Length/32000.0).ToString("F2")+"s\nFull re-transcription on stop: "+baseline.ToString("F3")+"s\nIncremental stop-to-result: "+incremental.ToString("F3")+"s\nAlready recognized before stop: "+(cache.Offset/32000.0).ToString("F2")+"s ("+chunks+" chunks)\nRemaining tail: "+((pcm.Length-cache.Offset)/32000.0).ToString("F2")+"s\nContent checks: PASS\nNo microphone or external typing used. Excludes cold start and translation.\n");
     }
+    public async Task ExerciseSilenceForTest(){
+        timer.Stop();var fake=(ReliabilityEngine)engine;config.Polish=false;config.AutoPaste=true;recordEnglish=false;var report=new StringBuilder();
+        foreach(string kind in new[]{"silence","dc","hum","hiss-low","hiss-medium","hiss-loud","click"}){
+            var bytes=new byte[6*32000];var random=new Random(42);
+            for(int i=0;i<bytes.Length/2;i++){
+                int value=kind=="dc"?2048:kind=="hum"?(int)(500*Math.Sin(2*Math.PI*50*i/16000.0)):kind.StartsWith("hiss")?random.Next(-(kind=="hiss-low"?80:kind=="hiss-medium"?500:2000),kind=="hiss-low"?81:kind=="hiss-medium"?501:2001):kind=="click"&&i>=16000&&i<16080?16000:0;
+                bytes[i*2]=(byte)value;bytes[i*2+1]=(byte)(value>>8);
+            }
+            bool speech=SpeechActivity.Contains(bytes);report.AppendLine(kind+" speech="+speech);
+            if(speech){File.WriteAllText(Path.Combine(Program.Home,"silence-test.txt"),report.ToString());throw new Exception("Non-speech accepted: "+kind);}
+            var cache=new TranscriptCache();cache.PreviewEnd=bytes.Length;cache.PreviewText="语音识别 专有名词 AI agents prompt engineering";
+            preview.Text=cache.PreviewText;int before=fake.Transcriptions;session++;await ProcessRecording(bytes,IntPtr.Zero,session,CancellationToken.None,cache);
+            if(fake.Transcriptions!=before||preview.Text!=""||copy.Visible)throw new Exception("Silent input reused polluted cache: "+kind);
+            var incremental=new TranscriptCache();await UpdateIncremental(incremental,bytes,false,CancellationToken.None);if(fake.Transcriptions!=before||incremental.Text!="")throw new Exception("Silent preview invoked ASR: "+kind);
+        }
+        byte[] positive=File.ReadAllBytes(Path.Combine(Program.Home,"speech-test.raw"));if(!SpeechActivity.Contains(positive))throw new Exception("Real speech rejected");
+        config.AutoPaste=false;session++;int prior=fake.Transcriptions;await ProcessRecording(positive,IntPtr.Zero,session,CancellationToken.None);if(fake.Transcriptions!=prior+1||string.IsNullOrWhiteSpace(preview.Text))throw new Exception("Real speech processing failed");
+        var transport=new AsrPayloadProbe();using(var real=new Engine(Settings.Load(),transport)){
+            string text=await real.Transcribe(AudioCapture.Wave(new byte[32000]),CancellationToken.None);if(text!=""||real.Loaded||transport.Calls!=0)throw new Exception("Silent ASR started a model or generated text");
+            await real.Transcribe(AudioCapture.Wave(positive),CancellationToken.None);
+            var body=Program.Json.DeserializeObject(transport.Body) as Dictionary<string,object>;var messages=(object[])body["messages"];var system=(Dictionary<string,object>)messages[0];
+            if(transport.Calls!=1||Convert.ToString(system["content"])!="")throw new Exception("ASR prompt leaked vocabulary");
+        }
+        report.AppendLine("No-speech preview/final/cache: zero ASR calls, empty result: PASS");report.AppendLine("Real speech fixture accepted: PASS");report.AppendLine("Engine rejects silence without model startup: PASS");report.AppendLine("Outgoing ASR payload has empty system context, no vocabulary: PASS");
+        File.WriteAllText(Path.Combine(Program.Home,"silence-test.txt"),report.ToString());
+    }
     void SavePreview(){using(var bitmap=new Bitmap(Width,Height)){DrawToBitmap(bitmap,new Rectangle(Point.Empty,Size));bitmap.Save(Path.Combine(Program.Home,Program.UiSample?"live-preview.png":"preview.png"),System.Drawing.Imaging.ImageFormat.Png);}}
     protected override void OnFormClosing(FormClosingEventArgs e){closing=true;session++;ReleaseLanguageKey();timer.Stop();morphTimer.Stop();morphTimer.Dispose();ClearSnapshot();compactTip.Dispose();if(coffeeLogo!=null)coffeeLogo.Dispose();if(registered)Native.UnregisterHotKey(Handle,activeHotkeyId);if(operation!=null)operation.Cancel();if(liveCancel!=null)liveCancel.Cancel();var capture=audio;audio=null;if(capture!=null)Work.Observe(Task.Run(()=>capture.Dispose()));engine.Dispose();tray.Visible=false;tray.Dispose();if(appIcon!=null)appIcon.Dispose();base.OnFormClosing(e);}
 }
 
+class AsrPayloadProbe : HttpMessageHandler {
+    public int Calls;public string Body;
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken token){Calls++;Body=await request.Content.ReadAsStringAsync();return new HttpResponseMessage(System.Net.HttpStatusCode.OK){Content=new StringContent("{\"choices\":[{\"finish_reason\":\"stop\",\"message\":{\"content\":\"测试\"}}]}")};}
+}
 class ReliabilityEngine : Engine {
     public int Phase,Transcriptions,LastAudioBytes;public bool PolishDuringEnglish;public TaskCompletionSource<string> Pending;
     public const string Raw="订单不是3个，是5个，金额129元。";

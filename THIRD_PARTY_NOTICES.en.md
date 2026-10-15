@@ -18,3 +18,5 @@ Runtime resources are downloaded separately and excluded from the repository and
 The coffee artwork is AI-generated for the project. Its image and prompt are in `assets/`; project artwork is offered under the root MIT license.
 
 `runtime-manifest.json` fixes versions, URLs, and SHA-256. Setup does not execute downloaded installers or change Windows security settings.
+
+The release includes the approximately 50 KB x64 native WebRtcVad.dll from [WebRtcVadSharp 1.3.2](https://www.nuget.org/packages/WebRtcVadSharp/1.3.2), without its managed adapter. Source: [ladenedge/WebRtcVadSharp](https://github.com/ladenedge/WebRtcVadSharp). See the [WebRTC BSD license](licenses/WebRTC-BSD.txt) and [adapter MIT license](licenses/WebRtcVadSharp-MIT.txt). Build scripts pin the version and package/DLL SHA-256. The Microsoft Visual C++ x64 runtime is required. The upstream speech fixture is attributed and pinned in tests/fixtures/README.txt and excluded from releases.

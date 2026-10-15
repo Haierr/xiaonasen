@@ -1,5 +1,19 @@
 # 更新记录
 
+## 1.2.4
+
+- 移除 ASR 系统提示中的词表，避免底噪输入被补写成词表内容。
+- 使用本地 WebRTC 语音活动检测，预览、最终转写和 ASR 请求均拦截无语音输入。
+- 无语音时清空本次结果并禁止自动填入，即使已有缓存；检测失败时不继续识别。
+- 增加静音、直流偏移、嗡声、底噪、点击声、污染缓存、真实语音和出站请求检查。
+
+### English
+
+- Remove vocabulary from the ASR system prompt to prevent prompt echo on non-speech audio.
+- Gate previews, final transcription, and ASR requests with local WebRTC voice activity detection.
+- Clear no-speech results and prevent insertion even with a polluted cache; detection failures stop recognition.
+- Add silence, DC, hum, hiss, click, cache, real-speech, and outgoing-payload checks.
+
 ## 1.2.3
 
 - 正在录音时，麦克风按钮和外圈显示红色；结束或取消后恢复主题颜色。

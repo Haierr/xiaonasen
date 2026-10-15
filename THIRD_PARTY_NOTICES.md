@@ -18,3 +18,5 @@ ASR 请求协议、LoRA 调用约定和保守整理思路参考 [frankzch/Saymor
 咖啡图案由内置 AI 图像生成功能生成，用于本项目图标。原始图像与提示词位于 `assets/`；本项目素材按根目录 MIT 许可提供。
 
 `runtime-manifest.json` 固定资源版本、下载地址与 SHA-256。下载脚本只准备运行资源，不执行下载的安装程序，也不更改 Windows 安全设置。
+
+发行包包含 [WebRtcVadSharp 1.3.2](https://www.nuget.org/packages/WebRtcVadSharp/1.3.2) 的 x64 原生 WebRtcVad.dll（约 50 KB），用于语音活动检测，不使用托管适配器。来源为 [ladenedge/WebRtcVadSharp](https://github.com/ladenedge/WebRtcVadSharp)。许可见 [WebRTC BSD](licenses/WebRTC-BSD.txt) 和 [适配层 MIT](licenses/WebRtcVadSharp-MIT.txt)。构建固定包版本及包/DLL 的 SHA-256；需要系统 Microsoft Visual C++ x64 运行库。上游语音测试样本来源和校验值见 tests/fixtures/README.txt，不进入发行包。

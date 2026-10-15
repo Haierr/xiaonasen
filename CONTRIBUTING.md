@@ -7,7 +7,7 @@
 ```powershell
 .\build.ps1
 .\scripts\test.ps1
-# 需要交互式桌面，先退出正常运行的程序，避免占用 Ctrl+R
+# 需要交互式桌面，先退出正常运行的程序，避免占用 Ctrl+E
 .\scripts\test.ps1 -Interactive -Stress
 # 需要完整运行环境、麦克风和本机中文 SAPI 语音
 .\scripts\test.ps1 -WithRuntime

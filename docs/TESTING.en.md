@@ -35,3 +35,7 @@ The real-engine recovery check uses locally synthesized Chinese speech without m
 ## Incremental latency test
 
 `--reliability-test` also covers completed-segment reuse, provisional-tail replacement after new speech, silent-tail reuse, and cancellation without advancing the cache or duplicating text. `--latency-test` uses synthetic Chinese speech with the real local model, without microphone capture or external typing. It compares full re-transcription on stop with tail-only processing after earlier segments have been recognized. This device measured 1.840 s versus 0.085 s for the same 60.98 s synthetic recording, with a 2.71 s remaining tail. This assumes incremental recognition keeps up with recording and excludes cold startup, translation, AI cleanup, and insertion. It is not a guarantee for live speech or other devices.
+
+## No-speech regression
+
+`--silence-test` uses real WebRTC VAD on zeros, DC offset, 50 Hz hum, seeded white noise at three levels, a short click, a deliberately polluted cache, and an upstream real-speech fixture. It checks zero ASR calls and empty results on no-speech preview/final paths, plus an empty outgoing ASR system context without vocabulary. No model, microphone, or external typing is used. These cases do not prove rejection of every environmental sound; background voices may count as speech. Hung-task and cache tests inject a deterministic detector, while this separate check validates the actual VAD component.
