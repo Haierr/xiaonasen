@@ -1,7 +1,7 @@
 {
   "ModelRoot": "runtime",
   "Microphone": "",
-  "Polish": true,
+  "Polish": false,
   "AutoPaste": true,
   "EnglishOutput": false,
   "RecordingShortcut": "Ctrl+E",

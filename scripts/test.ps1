@@ -3,10 +3,10 @@ param([string]$AppDirectory = (Join-Path $PSScriptRoot '..\dist'),[switch]$WithR
 $ErrorActionPreference = 'Stop'
 $binary = Join-Path ([IO.Path]::GetFullPath($AppDirectory)) 'xiaonasen.exe'
 if (!(Test-Path -LiteralPath $binary)) {throw 'Run build.ps1 first'}
-$checks = @('--appearance-test','--compact-test','--language-key-test','--hotkey-test')
+$checks = @('--appearance-test','--compact-test','--language-key-test','--hotkey-test','--reliability-test')
 if ($Interactive) {$checks += '--window-test'}
 if ($Stress) {$checks += '--stress-test'}
-if ($WithRuntime) {$checks += @('--self-test','--translation-test')}
+if ($WithRuntime) {$checks += @('--self-test','--translation-test','--recovery-test')}
 foreach ($check in $checks) {
     Write-Output "Running $check"
     $process = Start-Process -FilePath $binary -ArgumentList $check -WindowStyle Hidden -PassThru

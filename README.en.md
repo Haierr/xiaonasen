@@ -34,7 +34,7 @@ A small coffee on your desktop. Clear feedback while you speak. A native Windows
 - **A coffee when idle.** The small circle expands smoothly when recording starts and collapses after five idle seconds following completion.
 - **Live feedback.** The waveform follows microphone volume; listening status and Chinese text previews update as you speak.
 - **Chinese or English output.** Press T while recording to switch between cleaned Chinese and an English translation of your Chinese speech.
-- **Conservative cleanup.** Remove fillers and repetition, with a vocabulary list to help preserve technical names and spelling.
+- **Fast cleanup.** Local rules remove standalone fillers and exactly repeated sentences, and normalize common technical names without another model pass. Optional AI cleanup has a 12-second total budget and preserves the source on timeout.
 - **Mouse pass-through.** Click the application behind the overlay. Hold Alt to interact with the overlay itself.
 - **Appearance customization.** Metallic themes, HEX colors, opacity, scale, corners, placement, and monitor selection.
 - **Models loaded on demand.** Unload after 30 idle seconds by default; the microphone is closed while idle.
@@ -76,7 +76,7 @@ The app is not code-signed. Download from this repository's Release and check th
 
 T is reserved only during recording. It returns to normal typing when recording stops, is canceled, enters processing, or the app exits. The default Ctrl+E overrides the same shortcut in other applications while Xiaonasen is running. If another global tool occupies a shortcut, use the tray or hold Alt and click the corresponding control.
 
-Recordings are limited to 90 seconds. On first use or after unloading, model preparation takes a few seconds while audio capture starts immediately. The preview remains Chinese; English translation happens after recording ends. Check names, numbers, and specialized content. Some fields, permission-level differences, or applications that do not support Ctrl+V may require manual copying.
+Recordings are limited to 10 minutes and transcribed in chunks of at most 24 seconds. The live preview shows only the latest 8 seconds; the complete transcript is generated when you stop. Press **Ctrl+E** again while processing, or click ×, to cancel immediately and prevent insertion; already recognized text remains available to copy. On first use or after unloading, model preparation takes a few seconds while audio capture starts immediately. The preview remains Chinese; English translation happens after recording ends. Check names, numbers, and specialized content. Some fields, permission-level differences, or applications that do not support Ctrl+V may require manual copying.
 
 ### Chinese labels in the app
 
@@ -102,7 +102,7 @@ Choose **外观 DIY** from the tray or hold Alt and click **DIY**. Adjust champa
 
 To customize recording, open **设置与词表**, click the shortcut field, press a combination, and save. Changes apply immediately without restarting. Use Ctrl or Alt with a letter, digit, function key, or another supported key. Conflicts preserve the previous shortcut. The default is Ctrl+E; recording-only T is unchanged.
 
-Choose **设置与词表** to select a microphone and configure cleanup, automatic insertion, output language, and model-unloading time. Add one term per line in `terms.txt`. The public defaults contain general technical terms, not the developer's personal vocabulary.
+Choose **设置与词表** to select a microphone and configure cleanup, automatic insertion, output language, and model-unloading time. **AI 精细整理** (AI cleanup) is off by default: fast rules do not infer spoken corrections or rewrite meaning. Enable AI for more complex corrections at a device-dependent speed. Existing users can uncheck this option to use the fast path. Add one term per line in `terms.txt`. The public defaults contain general technical terms, not the developer's personal vocabulary.
 
 ## Resources and privacy
 

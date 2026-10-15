@@ -1,5 +1,23 @@
 # 更新记录
 
+## 1.2.1
+
+- 默认快速规则整理，避免每次额外跑 AI；AI 精细整理可选，整次最多 12 秒，失败保留原文。
+- 处理中按录音快捷键或点击 × 即可取消，立即终止自有模型；旧任务不能写回新会话。
+- 预览仅处理最近 8 秒，降低频率，避免整段重复推理；结束后完整识别。
+- 录音上限改为 10 分钟，音频按最多 24 秒分段；长文本分段整理和翻译。
+- 英文模式直接翻译，省去前置 AI 整理；引擎停止不再在 UI 线程等待进程退出。
+- 增加卡住任务取消、超时回退、长段完整性、真实模型重启恢复验证。
+
+### English
+
+- Default to local rule-based cleanup, with optional AI cleanup capped at 12 seconds and source-preserving fallback.
+- Cancel processing with the recording shortcut or ×; stop the owned engine immediately and isolate stale results.
+- Preview only the latest eight seconds at a lower frequency; transcribe the complete recording on stop.
+- Support recordings up to ten minutes using audio chunks of at most 24 seconds and bounded text chunks.
+- Skip redundant cleanup before English translation; never wait for child-process exit on the UI thread.
+- Add stalled-task cancellation, timeout fallback, long-input integrity, and real-engine recovery checks.
+
 ## 1.2.0
 
 - 默认录音快捷键改为 Ctrl+E。
