@@ -32,7 +32,7 @@ A small coffee on your desktop. Clear feedback while you speak. A native Windows
 ## Features
 
 - **A coffee when idle.** The small circle expands smoothly when recording starts and collapses after five idle seconds following completion.
-- **Live feedback.** The waveform follows microphone volume; listening status and Chinese text previews update as you speak.
+- **Incremental transcription.** The waveform follows microphone volume; completed speech segments are retained while you speak and reused when you stop.
 - **Chinese or English output.** Press T while recording to switch between cleaned Chinese and an English translation of your Chinese speech.
 - **Fast cleanup.** Local rules remove standalone fillers and exactly repeated sentences, and normalize common technical names without another model pass. Optional AI cleanup has a 12-second total budget and preserves the source on timeout.
 - **Mouse pass-through.** Click the application behind the overlay. Hold Alt to interact with the overlay itself.
@@ -76,7 +76,7 @@ The app is not code-signed. Download from this repository's Release and check th
 
 T is reserved only during recording. It returns to normal typing when recording stops, is canceled, enters processing, or the app exits. The default Ctrl+E overrides the same shortcut in other applications while Xiaonasen is running. If another global tool occupies a shortcut, use the tray or hold Alt and click the corresponding control.
 
-Recordings are limited to 10 minutes and transcribed in chunks of at most 24 seconds. The live preview shows only the latest 8 seconds; the complete transcript is generated when you stop. Press **Ctrl+E** again while processing, or click ×, to cancel immediately and prevent insertion; already recognized text remains available to copy. On first use or after unloading, model preparation takes a few seconds while audio capture starts immediately. The preview remains Chinese; English translation happens after recording ends. Check names, numbers, and specialized content. Some fields, permission-level differences, or applications that do not support Ctrl+V may require manual copying.
+Recordings are limited to 10 minutes. Speech is recognized incrementally while recording, retaining completed segments. Stopping processes only the unfinished tail instead of transcribing everything again. If preview fails, unrecognized audio is completed in chunks of at most 24 seconds. Press **Ctrl+E** again while processing, or click ×, to cancel immediately and prevent insertion; already recognized text remains available to copy. On first use or after unloading, model preparation takes a few seconds while audio capture starts immediately. The preview remains Chinese; English translation happens after recording ends. Check names, numbers, and specialized content. Some fields, permission-level differences, or applications that do not support Ctrl+V may require manual copying.
 
 ### Chinese labels in the app
 

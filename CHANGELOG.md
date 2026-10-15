@@ -1,5 +1,19 @@
 # 更新记录
 
+## 1.2.2
+
+- 录音期间增量识别并保留已完成段落，停止后只补未识别的尾段。
+- 无新增语音的预览可直接复用；有新增语音则替换未确认尾段，避免重复追加。
+- 停止时短暂接收即将完成的识别结果，取消仍立即生效。
+- 增加缓存完整性、取消隔离及真实模型的停止后等待对比测试。
+
+### English
+
+- Retain completed segments while recording and recognize only the unfinished tail on stop.
+- Reuse previews followed by silence; replace provisional tails when new speech arrives without duplicating text.
+- Briefly allow an in-flight result to complete on stop while preserving immediate cancellation.
+- Add cache integrity, cancellation isolation, and real-model stop-to-result comparison checks.
+
 ## 1.2.1
 
 - 默认快速规则整理，避免每次额外跑 AI；AI 精细整理可选，整次最多 12 秒，失败保留原文。

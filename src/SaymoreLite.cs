@@ -20,7 +20,7 @@ using System.Windows.Forms;
 [assembly:AssemblyTitle("小纳森")]
 [assembly:AssemblyProduct("小纳森")]
 [assembly:AssemblyDescription("小纳森 · 轻量语音输入")]
-[assembly:AssemblyVersion("1.2.1.0")]
+[assembly:AssemblyVersion("1.2.2.0")]
 namespace SaymoreLite {
 static class Program {
     public static readonly string Home = AppDomain.CurrentDomain.BaseDirectory;
@@ -61,6 +61,9 @@ static class Program {
             UiTest=true;LifecycleTest=true;var form=new DictationForm(new ReliabilityEngine());
             form.Shown+=async(s,e)=>{try{await form.ExerciseReliabilityForTest();}catch(Exception ex){File.WriteAllText(Path.Combine(Home,"reliability-test.txt"),ex.ToString());Environment.ExitCode=1;}finally{form.Close();}};
             Application.Run(form);form.Dispose();return;
+        }
+        if(args.Length>0&&args[0]=="--latency-test"){
+            UiTest=true;LifecycleTest=true;var form=new DictationForm();form.Shown+=async(s,e)=>{try{await form.ExerciseLatencyForTest();}catch(Exception ex){File.WriteAllText(Path.Combine(Home,"latency-test.txt"),ex.ToString());Environment.ExitCode=1;}finally{form.Close();}};Application.Run(form);form.Dispose();return;
         }
         if(args.Length>0&&args[0]=="--window-test"){
             try{using(var form=new DictationForm()){
@@ -312,7 +315,7 @@ class AudioCapture : IDisposable {
         lock(sync)return pcm.ToArray();
     }
     public byte[] Snapshot(){lock(sync)return pcm.ToArray();}
-    public byte[] Recent(int seconds){lock(sync){int length=(int)Math.Min(pcm.Length,seconds*32000L);var bytes=new byte[length];Buffer.BlockCopy(pcm.GetBuffer(),(int)pcm.Length-length,bytes,0,length);return bytes;}}
+    public byte[] From(int offset,int seconds){lock(sync){int length=(int)Math.Min(Math.Max(0,pcm.Length-offset),seconds*32000L);var bytes=new byte[length];Buffer.BlockCopy(pcm.GetBuffer(),offset,bytes,0,length);return bytes;}}
     public static byte[] Wave(byte[] data) {
         using(var mem=new MemoryStream())using(var w=new BinaryWriter(mem)) {
             w.Write(Encoding.ASCII.GetBytes("RIFF"));w.Write(data.Length+36);w.Write(Encoding.ASCII.GetBytes("WAVEfmt "));w.Write(16);w.Write((ushort)1);w.Write((ushort)1);w.Write(16000);w.Write(32000);w.Write((ushort)2);w.Write((ushort)16);w.Write(Encoding.ASCII.GetBytes("data"));w.Write(data.Length);w.Write(data);return mem.ToArray();
@@ -336,7 +339,24 @@ static class Vocabulary {
         return text.Trim(' ','\r','\n','，','、');
     }
 }
+class TranscriptCache {
+    public int Offset,PreviewEnd;public string PreviewText="";public bool InFlight;
+    public readonly StringBuilder Confirmed=new StringBuilder();
+    public string Text {get{return Confirmed.ToString()+PreviewText;}}
+    public void Commit(int bytes,string text){if(!string.IsNullOrWhiteSpace(text)){Confirmed.Append(Vocabulary.QuickClean(text));Confirmed.AppendLine();}Offset+=bytes;PreviewEnd=Offset;PreviewText="";}
+    public string Reuse(byte[] pcm,out int offset){
+        offset=Offset;string text=Confirmed.ToString();
+        if(PreviewEnd>Offset&&PreviewEnd<=pcm.Length&&!string.IsNullOrWhiteSpace(PreviewText)&&Work.Quiet(pcm,PreviewEnd,pcm.Length-PreviewEnd)){text+=PreviewText;offset=pcm.Length;}
+        return text;
+    }
+}
 static class Work {
+    public static bool Quiet(byte[] pcm,int offset,int length){if(length<=0)return true;double energy=0;for(int i=offset;i+1<offset+length;i+=2){double v=(short)(pcm[i]|pcm[i+1]<<8)/32768.0;energy+=v*v;}return Math.Sqrt(energy/Math.Max(1,length/2))<0.0008;}
+    public static int CommitBoundary(byte[] pcm){
+        int end=pcm.Length;long quiet=long.MaxValue;
+        for(int p=Math.Max(0,pcm.Length-3*32000);p+640<=pcm.Length;p+=640){long energy=0;for(int i=p;i<p+640;i+=2){int v=(short)(pcm[i]|pcm[i+1]<<8);energy+=(long)v*v;}if(energy<=quiet){quiet=energy;end=p+320;}}
+        return end;
+    }
     static async Task<bool> Complete(Task task){await task;return true;}
     public static Task UntilCanceled(Task task,CancellationToken token){return UntilCanceled(Complete(task),token);}
     // A canceled session must not wait for a driver, transport, or model to cooperate.
@@ -496,7 +516,7 @@ class DictationForm : Form {
     bool compact=true,morphing,logoPressed,logoDragged,interactive;Size morphFrom,morphTo;double shapeRadius,morphRadiusFrom,morphRadiusTo;float cardReveal,revealFrom;Point logoDown;DateTime collapseAfter=DateTime.MaxValue;Bitmap cardSnapshot;Image coffeeLogo;Icon appIcon;int morphFrames;
     readonly uint ownPid=(uint)Process.GetCurrentProcess().Id;
     public bool HotkeyRegistered {get{return registered;}}
-    AudioCapture audio;Task warming,liveTask;CancellationTokenSource operation,liveCancel;int session;bool busy,recording,closing,expanded,registered,recordEnglish,languageKeyRegistered;DateTime recordStart,lastSound;IntPtr target;float visualLevel;
+    AudioCapture audio;Task warming,liveTask;TranscriptCache transcript;CancellationTokenSource operation,liveCancel;int session;bool busy,recording,closing,expanded,registered,recordEnglish,languageKeyRegistered;DateTime recordStart,lastSound;IntPtr target;float visualLevel;
     protected override bool ShowWithoutActivation{get{return !Program.UiTest;}}
     protected override CreateParams CreateParams{get{var p=base.CreateParams;p.ClassStyle|=0x20000;if(!Program.UiTest)p.ExStyle|=0x080800A0;return p;}}
     public DictationForm(Engine testEngine=null){
@@ -684,7 +704,7 @@ class DictationForm : Form {
         if(!compact&&!morphing&&!recording&&!busy&&!appearanceOpen&&!settingsOpen&&DateTime.UtcNow>=collapseAfter)CollapseLogo();
         if(recording&&warming!=null&&warming.IsFaulted){await Toggle();return;}
         if(recording){
-            previewTitle.Text=warming!=null&&!warming.IsCompleted?"正在加载模型 · 录音已开始":recordEnglish?"中文预览 · 结束后翻译":"近期语音预览 · 结束后完整识别";
+            previewTitle.Text=warming!=null&&!warming.IsCompleted?"正在加载模型 · 录音已开始":recordEnglish?"中文预览 · 结束后翻译":"边说边转写 · 已完成段落直接复用";
             float peak=audio.HasRecentAudio?audio.Peak:0;float mapped=Math.Min(1f,(float)Math.Sqrt(Math.Max(0,peak))*2.4f);visualLevel+=(mapped-visualLevel)*0.3f;wave.Level=visualLevel;microphone.Activity=visualLevel;microphone.Invalidate();
             if(peak>0.009f)lastSound=DateTime.UtcNow;
             int seconds=(int)(DateTime.UtcNow-recordStart).TotalSeconds;
@@ -695,23 +715,38 @@ class DictationForm : Form {
         if(!compact||recording||busy)wave.Animate();
         if(!busy&&!recording&&engine.Loaded&&(DateTime.UtcNow-engine.LastUse).TotalSeconds>=Math.Max(5,config.UnloadSeconds)){engine.Stop();SetState(config.EnglishOutput?"中文说，英文写":"随时开始说话","模型已释放 · Ctrl+E 录音");}
     }
-    async Task LivePreview(AudioCapture capture,Task ready,int version,CancellationToken token){
+    async Task LivePreview(AudioCapture capture,Task ready,TranscriptCache cache,int version,CancellationToken token){
         try{
-            await Work.UntilCanceled(ready,token);await Task.Delay(2500,token);
+            await Work.UntilCanceled(ready,token);
             while(recording&&!closing&&version==session){
                 token.ThrowIfCancellationRequested();
-                byte[] bytes=capture.Recent(8);
-                if(bytes.Length>32000&&Energy(bytes)>0.0008){
-                    string text=Vocabulary.Canonical(await Work.UntilCanceled(engine.Transcribe(AudioCapture.Wave(bytes),token),token));
-                    if(recording&&!closing&&version==session&&!token.IsCancellationRequested&&!string.IsNullOrWhiteSpace(text)){preview.Text=text;preview.SelectionStart=preview.TextLength;preview.ScrollToCaret();}
+                byte[] bytes=capture.From(cache.Offset,12);
+                if(bytes.Length>=32000){
+                    bool stable=bytes.Length>=12*32000;
+                    if(!stable&&cache.PreviewEnd>cache.Offset&&cache.PreviewEnd<=cache.Offset+bytes.Length&&Work.Quiet(bytes,cache.PreviewEnd-cache.Offset,bytes.Length-(cache.PreviewEnd-cache.Offset))){cache.PreviewEnd=cache.Offset+bytes.Length;}
+                    else if(stable||cache.Offset+bytes.Length-cache.PreviewEnd>=32000){
+                        await UpdateIncremental(cache,bytes,stable,token);
+                        if(recording&&!closing&&version==session&&!token.IsCancellationRequested){preview.Text=cache.Text;preview.SelectionStart=preview.TextLength;preview.ScrollToCaret();}
+                    }
+                    if(stable)continue;
                 }
-                await Task.Delay(4000,token);
+                await Task.Delay(2000,token);
             }
         }catch(OperationCanceledException){}catch(Exception ex){Program.Log(ex);if(recording&&!closing&&version==session)previewTitle.Text="预览暂不可用 · 结束后识别";}
     }
+    async Task UpdateIncremental(TranscriptCache cache,byte[] bytes,bool stable,CancellationToken token){
+        if(stable){int length=Work.CommitBoundary(bytes);Array.Resize(ref bytes,length);}
+        string text="";cache.InFlight=true;
+        try{if(!Work.Quiet(bytes,0,bytes.Length))text=Vocabulary.QuickClean(await Work.UntilCanceled(engine.Transcribe(AudioCapture.Wave(bytes),token),token));token.ThrowIfCancellationRequested();}
+        finally{cache.InFlight=false;}
+        if(stable){if(string.IsNullOrWhiteSpace(text)&&!Work.Quiet(bytes,0,bytes.Length))throw new IOException("本段未识别到文字，结束后重试完整转写。");cache.Commit(bytes.Length,text);}
+        else{cache.PreviewEnd=cache.Offset+bytes.Length;cache.PreviewText=text;}
+    }
     static double Energy(byte[] pcm){double sum=0;for(int i=0;i+1<pcm.Length;i+=2){double v=(short)(pcm[i]|(pcm[i+1]<<8))/32768.0;sum+=v*v;}return pcm.Length<2?0:Math.Sqrt(sum/(pcm.Length/2));}
     async Task StopPreview(CancellationToken token){
-        var cancel=liveCancel;var task=liveTask;liveCancel=null;liveTask=null;if(cancel!=null)cancel.Cancel();
+        var cancel=liveCancel;var task=liveTask;liveCancel=null;liveTask=null;
+        if(task!=null&&transcript!=null&&transcript.InFlight)await Task.WhenAny(task,Task.Delay(350,token));
+        if(cancel!=null)cancel.Cancel();
         try{if(task!=null)await Work.UntilCanceled(task,token);}catch(OperationCanceledException){token.ThrowIfCancellationRequested();}finally{if(cancel!=null)cancel.Dispose();}
     }
     async Task Toggle(){
@@ -719,28 +754,31 @@ class DictationForm : Form {
         if(!recording){
             try{
                 session++;CaptureTarget();recordEnglish=config.EnglishOutput;operation=new CancellationTokenSource();audio=new AudioCapture();audio.Start(config.Microphone);recording=true;BindLanguageKey();UpdateMode();recordStart=DateTime.UtcNow;lastSound=DateTime.UtcNow.AddSeconds(-3);visualLevel=0;
-                preview.Text="";previewTitle.Text="近期语音预览 · 完整文字在结束后生成";copy.Visible=false;Expand(true);microphone.Text="■";microphone.Listening=true;wave.Listening=true;wave.Thinking=false;timer.Interval=40;SetState("正在聆听","再按 Ctrl+E 结束 · × 放弃录音");
-                warming=engine.Ready(operation.Token);liveCancel=CancellationTokenSource.CreateLinkedTokenSource(operation.Token);liveTask=LivePreview(audio,warming,session,liveCancel.Token);
+                transcript=new TranscriptCache();preview.Text="";previewTitle.Text="边说边转写";copy.Visible=false;Expand(true);microphone.Text="■";microphone.Listening=true;wave.Listening=true;wave.Thinking=false;timer.Interval=40;SetState("正在聆听","再按 Ctrl+E 结束 · × 放弃录音");
+                warming=engine.Ready(operation.Token);liveCancel=CancellationTokenSource.CreateLinkedTokenSource(operation.Token);liveTask=LivePreview(audio,warming,transcript,session,liveCancel.Token);
             }catch(Exception ex){ReleaseLanguageKey();if(audio!=null){audio.Dispose();audio=null;}if(operation!=null){operation.Dispose();operation=null;}recording=false;UpdateMode();ScheduleCollapse();Program.Log(ex);SetState("无法开始录音",ex.Message);}return;
         }
         recording=false;ReleaseLanguageKey();busy=true;UpdateMode();microphone.Text="×";microphone.AccessibleName="立即取消处理";microphone.Listening=false;wave.Listening=false;wave.Thinking=true;timer.Interval=80;IntPtr destination=target;
-        int version=session;var current=operation;var token=current.Token;var capture=audio;audio=null;var ready=warming;
+        int version=session;var current=operation;var token=current.Token;var capture=audio;audio=null;var ready=warming;var cache=transcript;
         try{
             SetState("正在识别","Ctrl+E 或 × 立即取消");
             byte[] pcm=await Work.UntilCanceled(Task.Run(()=>{try{return capture.Stop();}finally{capture.Dispose();}}),token);
             capture=null;
             await StopPreview(token);await Work.UntilCanceled(ready,token);
-            await ProcessRecording(pcm,destination,version,token);
+            await ProcessRecording(pcm,destination,version,token,cache);
         }catch(OperationCanceledException){if(!closing&&version==session)SetState("已取消","按 Ctrl+E 重新开始");}
         catch(Exception ex){Program.Log(ex);if(!closing&&version==session){SetState("本次处理未完成",ex.Message);if(!string.IsNullOrWhiteSpace(preview.Text)){previewTitle.Text="已有文字 · 可复制";copy.Visible=true;}}}
         finally{current.Dispose();if(version==session&&!closing){operation=null;ResetSession();engine.LastUse=DateTime.UtcNow;ScheduleCollapse();}}
     }
     void ResetSession(){busy=false;recording=false;warming=null;microphone.Text="●";microphone.AccessibleName="开始或停止录音";microphone.Listening=false;wave.Listening=false;wave.Thinking=false;wave.Level=0;microphone.Invalidate();timer.Interval=200;UpdateShortcutHints();}
-    async Task ProcessRecording(byte[] pcm,IntPtr destination,int version,CancellationToken token){
+    async Task ProcessRecording(byte[] pcm,IntPtr destination,int version,CancellationToken token,TranscriptCache cache=null){
         if(pcm.Length<6400){SetState("录音太短","按 Ctrl+E 再试一次");return;}
-        if(Energy(pcm)<0.0008){SetState("没有收到声音","检查麦克风连接，或在设置中更换");return;}
-        var recognized=new StringBuilder();int index=0;preview.Text="";previewTitle.Text="完整转写";
-        foreach(byte[] audioPart in Work.AudioParts(pcm)){
+        if((cache==null||string.IsNullOrWhiteSpace(cache.Text))&&Energy(pcm)<0.0008){SetState("没有收到声音","检查麦克风连接，或在设置中更换");return;}
+        int offset=0;string cached=cache==null?"":cache.Reuse(pcm,out offset);
+        if(offset<0||offset>pcm.Length)throw new InvalidOperationException("录音缓存范围无效，请重新录音。");
+        var recognized=new StringBuilder(cached);int index=0;preview.Text=cached;previewTitle.Text="正在补全末尾";
+        var remaining=new byte[pcm.Length-offset];Buffer.BlockCopy(pcm,offset,remaining,0,remaining.Length);
+        foreach(byte[] audioPart in Work.AudioParts(remaining)){
             token.ThrowIfCancellationRequested();SetState("正在识别 · 第 "+(++index)+" 段","Ctrl+E 或 × 立即取消");
             if(Energy(audioPart)<0.0008)continue;
             await Work.UntilCanceled(engine.Ready(token),token);
@@ -872,20 +910,42 @@ class DictationForm : Form {
             fake.Phase=0;config.Polish=false;byte[] multi=new byte[60*32000];for(int i=0;i<multi.Length;i+=2)multi[i+1]=8;fake.Transcriptions=0;session++;
             using(var token=new CancellationTokenSource())await ProcessRecording(multi,IntPtr.Zero,session,token.Token);
             if(fake.Transcriptions<3||Regex.Matches(preview.Text,"金额129元").Count!=fake.Transcriptions)throw new Exception("Multi-part result was truncated");
+            var cache=new TranscriptCache();byte[] block=new byte[12*32000];for(int i=0;i<block.Length;i+=2)block[i+1]=8;
+            await UpdateIncremental(cache,block,true,CancellationToken.None);await UpdateIncremental(cache,block,true,CancellationToken.None);
+            byte[] tail=new byte[6*32000];for(int i=0;i<tail.Length;i+=2)tail[i+1]=8;await UpdateIncremental(cache,tail,false,CancellationToken.None);
+            byte[] complete=new byte[cache.Offset+tail.Length+32000];for(int i=0;i<complete.Length-32000;i+=2)complete[i+1]=8;
+            int already=fake.Transcriptions;session++;await ProcessRecording(complete,IntPtr.Zero,session,CancellationToken.None,cache);
+            if(fake.Transcriptions!=already||Regex.Matches(preview.Text,"金额129元").Count!=3)throw new Exception("Cached preview was rerun, lost, or duplicated");
+            for(int i=complete.Length-320;i<complete.Length;i+=2)complete[i+1]=8;already=fake.Transcriptions;session++;await ProcessRecording(complete,IntPtr.Zero,session,CancellationToken.None,cache);
+            if(fake.Transcriptions!=already+1||fake.LastAudioBytes!=complete.Length-cache.Offset)throw new Exception("Unrecognized tail did not replace provisional preview");
+            int confirmed=cache.Offset;fake.Phase=1;fake.Pending=new TaskCompletionSource<string>();using(var cancel=new CancellationTokenSource()){var pending=UpdateIncremental(cache,block,true,cancel.Token);cancel.Cancel();try{await pending;throw new Exception("Canceled chunk committed");}catch(OperationCanceledException){}}fake.Pending.TrySetResult("迟到结果");if(cache.Offset!=confirmed)throw new Exception("Canceled preview advanced cache");fake.Phase=0;
             if(beats<50)throw new Exception("UI heartbeat stalled");
         }
-        File.WriteAllText(Path.Combine(Program.Home,"reliability-test.txt"),"Ten-minute audio: no gaps, duplicates, or oversize chunks: PASS\nLong text and Unicode: PASS\nConservative local cleanup: PASS\nCancel stalled recognition / polish / translation within 500 ms: PASS\nCanceled task cannot overwrite next session: PASS\nEnglish skips redundant polish: PASS\nPolish deadline preserves source: PASS\nMulti-part transcript retained: PASS\nUI message pump remains responsive: PASS\n");
+        File.WriteAllText(Path.Combine(Program.Home,"reliability-test.txt"),"Ten-minute audio: no gaps, duplicates, or oversize chunks: PASS\nLong text and Unicode: PASS\nConservative local cleanup: PASS\nCancel stalled recognition / polish / translation within 500 ms: PASS\nCanceled task cannot overwrite next session: PASS\nEnglish skips redundant polish: PASS\nPolish deadline preserves source: PASS\nMulti-part transcript retained: PASS\nCached segments and silent tail reused without inference: PASS\nNew speech replaces provisional tail without duplication: PASS\nCanceled chunk cannot advance cache: PASS\nUI message pump remains responsive: PASS\n");
+    }
+    public async Task ExerciseLatencyForTest(){
+        timer.Stop();config.Polish=false;config.AutoPaste=false;recordEnglish=false;byte[] raw;
+        using(var synth=new SpeechSynthesizer())using(var mem=new MemoryStream()){
+            bool chinese=false;foreach(var voice in synth.GetInstalledVoices())if(voice.Enabled&&voice.VoiceInfo.Culture.Name.StartsWith("zh")){synth.SelectVoice(voice.VoiceInfo.Name);chinese=true;break;}if(!chinese)throw new Exception("Chinese SAPI voice unavailable");
+            synth.SetOutputToAudioStream(mem,new System.Speech.AudioFormat.SpeechAudioFormatInfo(16000,System.Speech.AudioFormat.AudioBitsPerSample.Sixteen,System.Speech.AudioFormat.AudioChannel.Mono));synth.Speak("这是语音输入测试，订单数量是五个，每个价格一百二十九元。我们明天下午四点开会，请提前十分钟到。");synth.SetOutputToNull();raw=mem.ToArray();
+        }
+        byte[] pcm=new byte[raw.Length*5];for(int i=0;i<5;i++)Buffer.BlockCopy(raw,0,pcm,i*raw.Length,raw.Length);
+        await engine.Ready(CancellationToken.None);session++;var watch=Stopwatch.StartNew();await ProcessRecording(pcm,IntPtr.Zero,session,CancellationToken.None);double baseline=watch.Elapsed.TotalSeconds;string before=preview.Text;
+        var cache=new TranscriptCache();int chunks=0;while(cache.Offset+12*32000<=pcm.Length){var part=new byte[12*32000];Buffer.BlockCopy(pcm,cache.Offset,part,0,part.Length);await UpdateIncremental(cache,part,true,CancellationToken.None);chunks++;}
+        session++;watch.Restart();await ProcessRecording(pcm,IntPtr.Zero,session,CancellationToken.None,cache);double incremental=watch.Elapsed.TotalSeconds;
+        if(Regex.Matches(before,"订单").Count<4||Regex.Matches(preview.Text,"订单").Count<4)throw new Exception("Latency fixture lost repeated speech");
+        File.WriteAllText(Path.Combine(Program.Home,"latency-test.txt"),"Synthetic speech duration: "+(pcm.Length/32000.0).ToString("F2")+"s\nFull re-transcription on stop: "+baseline.ToString("F3")+"s\nIncremental stop-to-result: "+incremental.ToString("F3")+"s\nAlready recognized before stop: "+(cache.Offset/32000.0).ToString("F2")+"s ("+chunks+" chunks)\nRemaining tail: "+((pcm.Length-cache.Offset)/32000.0).ToString("F2")+"s\nContent checks: PASS\nNo microphone or external typing used. Excludes cold start and translation.\n");
     }
     void SavePreview(){using(var bitmap=new Bitmap(Width,Height)){DrawToBitmap(bitmap,new Rectangle(Point.Empty,Size));bitmap.Save(Path.Combine(Program.Home,Program.UiSample?"live-preview.png":"preview.png"),System.Drawing.Imaging.ImageFormat.Png);}}
     protected override void OnFormClosing(FormClosingEventArgs e){closing=true;session++;ReleaseLanguageKey();timer.Stop();morphTimer.Stop();morphTimer.Dispose();ClearSnapshot();compactTip.Dispose();if(coffeeLogo!=null)coffeeLogo.Dispose();if(registered)Native.UnregisterHotKey(Handle,activeHotkeyId);if(operation!=null)operation.Cancel();if(liveCancel!=null)liveCancel.Cancel();var capture=audio;audio=null;if(capture!=null)Work.Observe(Task.Run(()=>capture.Dispose()));engine.Dispose();tray.Visible=false;tray.Dispose();if(appIcon!=null)appIcon.Dispose();base.OnFormClosing(e);}
 }
 
 class ReliabilityEngine : Engine {
-    public int Phase,Transcriptions;public bool PolishDuringEnglish;public TaskCompletionSource<string> Pending;
+    public int Phase,Transcriptions,LastAudioBytes;public bool PolishDuringEnglish;public TaskCompletionSource<string> Pending;
     public const string Raw="订单不是3个，是5个，金额129元。";
     public ReliabilityEngine():base(new Settings()){}
     public override Task Ready(CancellationToken token){token.ThrowIfCancellationRequested();return Task.FromResult(0);}
-    public override Task<string> Transcribe(byte[] wav,CancellationToken token){Transcriptions++;return Phase==1?Pending.Task:Task.FromResult(Raw);}
+    public override Task<string> Transcribe(byte[] wav,CancellationToken token){Transcriptions++;LastAudioBytes=wav.Length-44;return Phase==1?Pending.Task:Task.FromResult(Raw);}
     public override Task<string> Polish(string raw,CancellationToken token){if(Phase==3)PolishDuringEnglish=true;return Phase==2?Pending.Task:Task.FromResult(raw);}
     public override Task<string> Translate(string raw,CancellationToken token){return Phase==3?Pending.Task:Task.FromResult("Five items, 129 yuan.");}
     public override void Stop(){}

@@ -31,3 +31,7 @@ On one development device, the unloaded UI working set was about 43 MB, with abo
 Reports are excluded from Git. Public documentation contains aggregate findings rather than raw device information, usernames, paths, or dictated content.
 
 The real-engine recovery check uses locally synthesized Chinese speech without microphone capture. It tests cancel/stop, reload, recognition after cancellation, multi-part speech, and unloading. This development-device run observed 5.67 s cold startup, 0.61 s short-phrase ASR, and approximately 1 ms cancel/stop. These are not cross-device guarantees.
+
+## Incremental latency test
+
+`--reliability-test` also covers completed-segment reuse, provisional-tail replacement after new speech, silent-tail reuse, and cancellation without advancing the cache or duplicating text. `--latency-test` uses synthetic Chinese speech with the real local model, without microphone capture or external typing. It compares full re-transcription on stop with tail-only processing after earlier segments have been recognized. This device measured 1.840 s versus 0.085 s for the same 60.98 s synthetic recording, with a 2.71 s remaining tail. This assumes incremental recognition keeps up with recording and excludes cold startup, translation, AI cleanup, and insertion. It is not a guarantee for live speech or other devices.
