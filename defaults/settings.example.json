@@ -4,6 +4,7 @@
   "Polish": true,
   "AutoPaste": true,
   "EnglishOutput": false,
+  "RecordingShortcut": "Ctrl+E",
   "UnloadSeconds": 30,
   "Look": {
     "Preset": "Champagne",

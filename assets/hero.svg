@@ -16,9 +16,9 @@
     <text x="66" y="251" font-size="25" fill="#e6dcc8">说得自然，写得轻松。</text>
     <text x="66" y="283" font-size="18" fill="#9da4aa">Speak naturally. Write effortlessly.</text>
     <rect x="64" y="328" width="578" height="45" rx="12" fill="#282a2a" stroke="#554d40"/>
-    <text x="83" y="357" font-size="14" fill="#d6c5a5">Ctrl+R</text><text x="146" y="357" font-size="13" fill="#a7adb3">Speak / 说话</text>
+    <text x="83" y="357" font-size="14" fill="#d6c5a5">Ctrl+E</text><text x="146" y="357" font-size="13" fill="#a7adb3">Speak / 说话</text>
     <text x="259" y="357" font-size="14" fill="#d6c5a5">T</text><text x="280" y="357" font-size="13" fill="#a7adb3">中文 ↔ English</text>
-    <text x="425" y="357" font-size="14" fill="#d6c5a5">Ctrl+R</text><text x="491" y="357" font-size="13" fill="#a7adb3">Insert / 填入</text>
+    <text x="425" y="357" font-size="14" fill="#d6c5a5">Ctrl+E</text><text x="491" y="357" font-size="13" fill="#a7adb3">Insert / 填入</text>
     <text x="904" y="317" font-size="12" text-anchor="middle" letter-spacing="2" fill="#bda170">SMALL PRESENCE. CLEAR FEEDBACK.</text>
     <text x="904" y="342" font-size="13" text-anchor="middle" fill="#8e969d">轻巧待机 · 清晰反馈</text>
   </g>

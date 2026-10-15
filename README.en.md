@@ -15,7 +15,7 @@
 
 # Xiaonasen · 小纳森
 
-Lightweight, local Chinese dictation for Windows. Press **Ctrl+R** to speak and insert cleaned text into your original input field. Press **T** while recording to translate your Chinese dictation into English.
+Lightweight, local Chinese dictation for Windows. Press **Ctrl+E** to speak and insert cleaned text into your original input field. Press **T** while recording to translate your Chinese dictation into English.
 
 A small coffee on your desktop. Clear feedback while you speak. A native Windows app that processes your speech locally.
 
@@ -68,13 +68,13 @@ The app is not code-signed. Download from this repository's Release and check th
 
 | Action | Result |
 | --- | --- |
-| Focus an input field, then **Ctrl+R** | Start recording and expand the overlay |
-| Release Ctrl+R, then press **T** while recording | Chinese output ↔ Chinese-to-English translation |
-| **Ctrl+R** again | Stop, clean up, and insert text in the selected output language |
+| Focus an input field, then **Ctrl+E** | Start recording and expand the overlay |
+| Release Ctrl+E, then press **T** while recording | Chinese output ↔ Chinese-to-English translation |
+| **Ctrl+E** again | Stop, clean up, and insert text in the selected output language |
 | Hold **Alt** | Click, copy, drag, or right-click the overlay |
 | Right-click the tray icon | Settings, vocabulary, appearance, previous result, language, model unloading, or exit |
 
-T is reserved only during recording. It returns to normal typing when recording stops, is canceled, enters processing, or the app exits. Ctrl+R overrides existing application shortcuts such as browser refresh while Xiaonasen is running. If another global tool occupies a shortcut, use the tray or hold Alt and click the corresponding control.
+T is reserved only during recording. It returns to normal typing when recording stops, is canceled, enters processing, or the app exits. The default Ctrl+E overrides the same shortcut in other applications while Xiaonasen is running. If another global tool occupies a shortcut, use the tray or hold Alt and click the corresponding control.
 
 Recordings are limited to 90 seconds. On first use or after unloading, model preparation takes a few seconds while audio capture starts immediately. The preview remains Chinese; English translation happens after recording ends. Check names, numbers, and specialized content. Some fields, permission-level differences, or applications that do not support Ctrl+V may require manual copying.
 
@@ -99,6 +99,8 @@ Recordings are limited to 90 seconds. On first use or after unloading, model pre
 Choose **外观 DIY** from the tray or hold Alt and click **DIY**. Adjust champagne gold, platinum, rose gold, custom HEX colors, opacity, scale, corners, and placement. Select a monitor, anchor to a screen corner, or drag manually. Changes preview immediately; save to keep them, or cancel to restore the previous appearance.
 
 ![Appearance panel preview](docs/appearance-demo.png)
+
+To customize recording, open **设置与词表**, click the shortcut field, press a combination, and save. Changes apply immediately without restarting. Use Ctrl or Alt with a letter, digit, function key, or another supported key. Conflicts preserve the previous shortcut. The default is Ctrl+E; recording-only T is unchanged.
 
 Choose **设置与词表** to select a microphone and configure cleanup, automatic insertion, output language, and model-unloading time. Add one term per line in `terms.txt`. The public defaults contain general technical terms, not the developer's personal vocabulary.
 

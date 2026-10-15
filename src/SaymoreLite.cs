@@ -20,7 +20,7 @@ using System.Windows.Forms;
 [assembly:AssemblyTitle("小纳森")]
 [assembly:AssemblyProduct("小纳森")]
 [assembly:AssemblyDescription("小纳森 · 轻量语音输入")]
-[assembly:AssemblyVersion("1.1.1.0")]
+[assembly:AssemblyVersion("1.2.0.0")]
 namespace SaymoreLite {
 static class Program {
     public static readonly string Home = AppDomain.CurrentDomain.BaseDirectory;
@@ -51,13 +51,16 @@ static class Program {
         if(args.Length>0&&args[0]=="--language-key-test"){
             UiTest=true;LifecycleTest=true;try{using(var form=new DictationForm()){form.Show();Application.DoEvents();form.ExerciseLanguageKeyForTest();}}catch(Exception ex){File.WriteAllText(Path.Combine(Home,"language-key-test.txt"),ex.ToString());Environment.ExitCode=1;}return;
         }
+        if(args.Length>0&&args[0]=="--hotkey-test"){
+            UiTest=true;LifecycleTest=true;try{using(var form=new DictationForm()){form.Show();Application.DoEvents();form.ExerciseRecordingHotkeyForTest();}}catch(Exception ex){File.WriteAllText(Path.Combine(Home,"hotkey-test.txt"),ex.ToString());Environment.ExitCode=1;}return;
+        }
         if(args.Length>0&&args[0]=="--window-test"){
             try{using(var form=new DictationForm()){
                 IntPtr foreground=Native.GetForegroundWindow();
                 for(int i=0;i<3;i++){form.Hide();form.ShowPanel(true);Application.DoEvents();if(!form.Visible||!Native.IsWindowVisible(form.Handle))throw new Exception("Popup visibility failed");}
-                if(!form.HotkeyRegistered)throw new Exception("Ctrl+R registration failed");form.ExerciseInteractionForTest();
+                if(!form.HotkeyRegistered)throw new Exception("Ctrl+E registration failed");form.ExerciseInteractionForTest();
                 if(Native.GetForegroundWindow()!=foreground)throw new Exception("Popup stole input focus");
-                File.WriteAllText(Path.Combine(Home,"window-test.txt"),"Ctrl+R registration: PASS\nHidden popup show (3 cycles): PASS\nInput focus preserved: PASS\nMouse pass-through (card / circle): PASS\nAlt interaction: PASS\n100% opacity pass-through: PASS\n");
+                File.WriteAllText(Path.Combine(Home,"window-test.txt"),"Ctrl+E registration: PASS\nHidden popup show (3 cycles): PASS\nInput focus preserved: PASS\nMouse pass-through (card / circle): PASS\nAlt interaction: PASS\n100% opacity pass-through: PASS\n");
             }}catch(Exception ex){File.WriteAllText(Path.Combine(Home,"window-test.txt"),ex.ToString());Environment.ExitCode=1;}return;
         }
         if(args.Length>0 && args[0]=="--ui-test"){UiTest=true;UiSample=args.Length>1&&args[1]=="--demo";Application.Run(new DictationForm());return;}
@@ -159,9 +162,23 @@ class AppearancePanel : Form {
     }
 }
 
+static class RecordingHotkey {
+    public static bool Parse(string value,out uint modifiers,out uint key,out string normalized){
+        modifiers=0;key=0;normalized="";if(string.IsNullOrWhiteSpace(value))return false;
+        var parts=value.Split('+');if(parts.Length<2)return false;
+        for(int i=0;i<parts.Length-1;i++){string part=parts[i].Trim().ToUpperInvariant();uint bit=part=="CTRL"||part=="CONTROL"?2u:part=="ALT"?1u:part=="SHIFT"?4u:0u;if(bit==0||(modifiers&bit)!=0)return false;modifiers|=bit;}
+        if((modifiers&3)==0)return false;
+        Keys parsed;string last=parts[parts.Length-1].Trim();if(last.Length==1&&char.IsDigit(last[0]))last="D"+last;
+        if(!Enum.TryParse<Keys>(last,true,out parsed))return false;
+        key=(uint)parsed;bool allowed=(key>=0x41&&key<=0x5a)||(key>=0x30&&key<=0x39)||(key>=0x70&&key<=0x87)||parsed==Keys.Space||parsed==Keys.Enter||parsed==Keys.Home||parsed==Keys.End||parsed==Keys.PageUp||parsed==Keys.PageDown;
+        if(!allowed)return false;
+        normalized=((modifiers&2)!=0?"Ctrl+":"")+((modifiers&1)!=0?"Alt+":"")+((modifiers&4)!=0?"Shift+":"")+(parsed>=Keys.D0&&parsed<=Keys.D9?((char)('0'+(int)parsed-(int)Keys.D0)).ToString():parsed.ToString());return true;
+    }
+}
 class Settings {
     public string ModelRoot = Path.Combine(Program.Home,"runtime");
     public string Microphone = "";
+    public string RecordingShortcut = "Ctrl+E";
     public bool Polish = true;
     public bool AutoPaste = true;
     public bool EnglishOutput = false;
@@ -170,7 +187,7 @@ class Settings {
     public static Settings Load() {
         var path=Path.Combine(Program.Home,"settings.json");
         if (File.Exists(path)) {
-            try {var value=Program.Json.Deserialize<Settings>(File.ReadAllText(path,Encoding.UTF8)) ?? new Settings();if(value.Look==null)value.Look=new Appearance();value.Look.Clamp();if(string.IsNullOrWhiteSpace(value.ModelRoot))value.ModelRoot=Path.Combine(Program.Home,"runtime");else if(!Path.IsPathRooted(value.ModelRoot))value.ModelRoot=Path.GetFullPath(Path.Combine(Program.Home,value.ModelRoot));return value;}
+            try {var value=Program.Json.Deserialize<Settings>(File.ReadAllText(path,Encoding.UTF8)) ?? new Settings();if(value.Look==null)value.Look=new Appearance();value.Look.Clamp();uint mods,key;string text;if(!RecordingHotkey.Parse(value.RecordingShortcut,out mods,out key,out text))value.RecordingShortcut="Ctrl+E";else value.RecordingShortcut=text;if(string.IsNullOrWhiteSpace(value.ModelRoot))value.ModelRoot=Path.Combine(Program.Home,"runtime");else if(!Path.IsPathRooted(value.ModelRoot))value.ModelRoot=Path.GetFullPath(Path.Combine(Program.Home,value.ModelRoot));return value;}
             catch(Exception ex) { Program.Log(ex); }
         }
         return new Settings();
@@ -415,7 +432,8 @@ class SoundWave : Control {
 }
 class DictationForm : Form {
     readonly Settings config;readonly Engine engine;readonly NotifyIcon tray;readonly System.Windows.Forms.Timer timer;
-    readonly PillButton microphone,copy,gear,close,mode,diy;readonly Label status,title,detail,previewTitle;readonly TextBox preview;readonly SoundWave wave;
+    readonly PillButton microphone,copy,gear,close,mode,diy;readonly Label status,title,detail,previewTitle,shortcutLabel;readonly TextBox preview;readonly SoundWave wave;int activeHotkeyId=1;
+    string ShortcutText {get{return config.RecordingShortcut;}}
     Color bg=Color.FromArgb(31,32,34),fg=Color.FromArgb(241,236,225),muted=Color.FromArgb(162,156,144),accent=Color.FromArgb(208,179,123),border=Color.FromArgb(94,83,62),surface;
     readonly Dictionary<Control,Rectangle> originalBounds=new Dictionary<Control,Rectangle>();readonly Dictionary<Control,float> originalFonts=new Dictionary<Control,float>();readonly Dictionary<Control,Font> ownedFonts=new Dictionary<Control,Font>();
     bool appearanceOpen,settingsOpen;float cardScale=1;
@@ -430,33 +448,33 @@ class DictationForm : Form {
         config=Settings.Load();engine=new Engine(config);AutoScaleMode=AutoScaleMode.None;Text="小纳森";Name="SaymoreLite";Font=new Font("Microsoft YaHei UI",9.5f);ForeColor=fg;BackColor=bg;FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=Program.UiTest;TopMost=true;ClientSize=new Size(438,166);StartPosition=FormStartPosition.Manual;DoubleBuffered=true;
         var area=Screen.FromPoint(Cursor.Position).WorkingArea;Location=new Point(area.Right-Width-28,area.Bottom-Height-28);
         title=new Label{Text="小纳森",Font=new Font("Microsoft YaHei UI",11,FontStyle.Bold),Location=new Point(24,18),Size=new Size(72,25),ForeColor=fg};Controls.Add(title);
-        var key=new Label{Text="Ctrl+R",ForeColor=muted,Location=new Point(100,21),Size=new Size(87,22)};Controls.Add(key);
+        shortcutLabel=new Label{Text=ShortcutText,ForeColor=muted,Location=new Point(100,21),Size=new Size(125,22),Font=new Font("Segoe UI",8)};Controls.Add(shortcutLabel);
         mode=Button("中文",230,15,84,30);mode.Click+=(s,e)=>SwitchOutputMode();
         diy=Button("DIY",318,12,30,32);diy.Font=new Font("Segoe UI",8,FontStyle.Bold);diy.AccessibleName="打开外观DIY面板";diy.Click+=(s,e)=>ShowAppearance();
         gear=Button("⚙",356,12,32,32);gear.AccessibleName="设置和专有名词";gear.Click+=(s,e)=>ShowSettings();
         close=Button("×",395,12,30,32);close.AccessibleName="取消录音并收回小圆圈";close.Click+=async(s,e)=>{await CancelCapture();CollapseLogo();};
         microphone=new PillButton{Microphone=true,Text="●",Location=new Point(20,61),Size=new Size(76,76),BackColor=bg,ForeColor=fg,AccessibleName="开始或停止录音"};Controls.Add(microphone);microphone.Click+=async(s,e)=>await Toggle();
         status=new Label{Text="随时开始说话",Location=new Point(111,64),Size=new Size(300,26),Font=new Font("Microsoft YaHei UI",11,FontStyle.Bold),ForeColor=fg};Controls.Add(status);
-        detail=new Label{Text="按 Ctrl+R，或点麦克风",Location=new Point(112,95),Size=new Size(294,22),ForeColor=muted};Controls.Add(detail);
+        detail=new Label{Text="按 Ctrl+E，或点麦克风",Location=new Point(112,95),Size=new Size(294,22),ForeColor=muted};Controls.Add(detail);
         wave=new SoundWave{Location=new Point(112,122),Size=new Size(292,26),BackColor=bg};Controls.Add(wave);
         previewTitle=new Label{Text="实时预览",Location=new Point(25,178),Size=new Size(300,22),ForeColor=muted};Controls.Add(previewTitle);previewTitle.Visible=false;
         preview=new TextBox{Location=new Point(26,207),Size=new Size(386,84),Multiline=true,ReadOnly=true,ScrollBars=ScrollBars.None,BackColor=Color.FromArgb(35,35,44),ForeColor=fg,BorderStyle=BorderStyle.None,Font=new Font("Microsoft YaHei UI",10)};Controls.Add(preview);preview.Visible=false;
         copy=Button("复制",361,172,51,30);copy.Visible=false;copy.Click+=(s,e)=>{if(!string.IsNullOrWhiteSpace(preview.Text)){Clipboard.SetText(preview.Text);SetState("已复制","在输入框按 Ctrl+V 粘贴");}};
-        var menu=new ContextMenuStrip{BackColor=bg,ForeColor=fg};menu.Items.Add("点击录音 / Ctrl+R",null,async(s,e)=>await Toggle());menu.Items.Add("显示卡片",null,(s,e)=>ShowPanel(true));menu.Items.Add("查看上次结果",null,(s,e)=>{ShowPanel(true);Expand(true);ScheduleCollapse();});var language=new ToolStripMenuItem("英文输出（中→英）");language.Click+=(s,e)=>SwitchOutputMode();menu.Items.Add(language);menu.Opening+=(s,e)=>language.Checked=config.EnglishOutput;menu.Items.Add("外观 DIY",null,(s,e)=>ShowAppearance());menu.Items.Add("设置与词表",null,(s,e)=>ShowSettings());menu.Items.Add("立即释放模型",null,(s,e)=>{if(!busy&&!recording){engine.Stop();SetState("已释放模型","按 Ctrl+R 开始录音");}});menu.Items.Add("退出",null,(s,e)=>Close());ContextMenuStrip=menu;
+        var menu=new ContextMenuStrip{BackColor=bg,ForeColor=fg};menu.Items.Add("点击录音 / Ctrl+E",null,async(s,e)=>await Toggle());menu.Items.Add("显示卡片",null,(s,e)=>ShowPanel(true));menu.Items.Add("查看上次结果",null,(s,e)=>{ShowPanel(true);Expand(true);ScheduleCollapse();});var language=new ToolStripMenuItem("英文输出（中→英）");language.Click+=(s,e)=>SwitchOutputMode();menu.Items.Add(language);menu.Opening+=(s,e)=>language.Checked=config.EnglishOutput;menu.Items.Add("外观 DIY",null,(s,e)=>ShowAppearance());menu.Items.Add("设置与词表",null,(s,e)=>ShowSettings());menu.Items.Add("立即释放模型",null,(s,e)=>{if(!busy&&!recording){engine.Stop();SetState("已释放模型","按 Ctrl+E 开始录音");}});menu.Items.Add("退出",null,(s,e)=>Close());ContextMenuStrip=menu;
         try{var iconPath=Path.Combine(Program.Home,"coffee.ico");if(File.Exists(iconPath)){appIcon=new Icon(iconPath,32,32);Icon=appIcon;}}catch(Exception ex){Program.Log(ex);}
-        tray=new NotifyIcon{Text="小纳森 · Ctrl+R 开始 / 停止",Icon=appIcon??SystemIcons.Application,Visible=true,ContextMenuStrip=menu};tray.DoubleClick+=(s,e)=>ShowPanel(true);
+        tray=new NotifyIcon{Text="小纳森 · Ctrl+E 开始 / 停止",Icon=appIcon??SystemIcons.Application,Visible=true,ContextMenuStrip=menu};tray.DoubleClick+=(s,e)=>ShowPanel(true);
         UpdateMode();
         timer=new System.Windows.Forms.Timer{Interval=200};timer.Tick+=async(s,e)=>await Tick();timer.Start();
-        morphTimer.Tick+=(s,e)=>MorphStep();compactTip.SetToolTip(this,"小纳森 · Ctrl+R 开始录音\n按住 Alt 可点击或拖动；右键打开设置");
+        morphTimer.Tick+=(s,e)=>MorphStep();compactTip.SetToolTip(this,"小纳森 · Ctrl+E 开始录音\n按住 Alt 可点击或拖动；右键打开设置");
         title.MouseDown+=(s,e)=>{if(e.Button==MouseButtons.Left){Native.ReleaseCapture();Native.SendMessage(Handle,0xa1,new IntPtr(2),IntPtr.Zero);config.Look.Position="Custom";config.Look.X=Left;config.Look.Y=Top;config.Save();}};
         foreach(Control control in Controls){originalBounds[control]=control.Bounds;originalFonts[control]=control.Font.Size;control.MouseDown+=(s,e)=>ScheduleCollapse();}
         try{var path=Path.Combine(Program.Home,"coffee-logo.png");if(File.Exists(path))using(var image=Image.FromFile(path)){coffeeLogo=new Bitmap(128,128);using(var g=Graphics.FromImage(coffeeLogo)){g.InterpolationMode=InterpolationMode.HighQualityBicubic;g.DrawImage(image,0,0,128,128);}}}catch(Exception ex){Program.Log(ex);}
-        ApplyAppearance(config.Look,true);
-        Shown+=(s,e)=>{SnapShape();if(!Program.UiTest&&!registered)BindHotkey();if(Program.UiTest&&!Program.LifecycleTest){if(Program.UiSample){compact=false;SetState("已听到你的声音","5 秒 · 再按 Ctrl+R 结束");Expand(true);SnapShape();previewTitle.Text="预览示例";preview.Text="我想在 VS Code 中测试 ChatGPT API，\r\n然后把结果上传到 GitHub。";wave.Listening=true;wave.Level=0.65f;wave.Animate();microphone.Listening=true;microphone.Activity=0.65f;microphone.Text="■";copy.Visible=false;}SavePreview();var exit=new System.Windows.Forms.Timer{Interval=1200};exit.Tick+=(a,b)=>{exit.Stop();exit.Dispose();Close();};exit.Start();}};
+        ApplyAppearance(config.Look,true);UpdateShortcutHints();
+        Shown+=(s,e)=>{SnapShape();if(!Program.UiTest&&!registered)BindHotkey();if(Program.UiTest&&!Program.LifecycleTest){if(Program.UiSample){compact=false;SetState("已听到你的声音","5 秒 · 再按 Ctrl+E 结束");Expand(true);SnapShape();previewTitle.Text="预览示例";preview.Text="我想在 VS Code 中测试 ChatGPT API，\r\n然后把结果上传到 GitHub。";wave.Listening=true;wave.Level=0.65f;wave.Animate();microphone.Listening=true;microphone.Activity=0.65f;microphone.Text="■";copy.Visible=false;}SavePreview();var exit=new System.Windows.Forms.Timer{Interval=1200};exit.Tick+=(a,b)=>{exit.Stop();exit.Dispose();Close();};exit.Start();}};
     }
     PillButton Button(string text,int x,int y,int w,int h){var b=new PillButton{Text=text,Location=new Point(x,y),Size=new Size(w,h),BackColor=bg,ForeColor=muted,Font=Font};Controls.Add(b);return b;}
-    void SetState(string main,string sub){status.Text=main;detail.Text=sub;}
-    void UpdateMode(){bool english=recording||busy?recordEnglish:config.EnglishOutput;mode.Text=(english?"中→英":"中文")+(recording?" · T":"");mode.Selected=english;mode.ForeColor=english?accent:muted;mode.AccessibleName=english?"英文输出，录音时按 T 切回中文":"中文输出，录音时按 T 切换到英文";mode.Invalidate();tray.Text=english?"小纳森 · 中→英 · Ctrl+R":"小纳森 · 中文 · Ctrl+R";if(!recording&&!busy)SetState(english?"中文说，英文写":"随时开始说话",english?"按 Ctrl+R，说完后翻译并填入":"按 Ctrl+R，或点麦克风");}
+    void SetState(string main,string sub){status.Text=main.Replace("Ctrl+E",ShortcutText);detail.Text=sub.Replace("Ctrl+E",ShortcutText);}
+    void UpdateMode(){bool english=recording||busy?recordEnglish:config.EnglishOutput;mode.Text=(english?"中→英":"中文")+(recording?" · T":"");mode.Selected=english;mode.ForeColor=english?accent:muted;mode.AccessibleName=english?"英文输出，录音时按 T 切回中文":"中文输出，录音时按 T 切换到英文";mode.Invalidate();UpdateShortcutHints();if(!recording&&!busy)SetState(english?"中文说，英文写":"随时开始说话",english?"按 Ctrl+E，说完后翻译并填入":"按 Ctrl+E，或点麦克风");}
     void SwitchOutputMode(){
         if(closing||busy||appearanceOpen||settingsOpen)return;
         config.EnglishOutput=!(recording?recordEnglish:config.EnglishOutput);if(recording)recordEnglish=config.EnglishOutput;
@@ -564,10 +582,47 @@ class DictationForm : Form {
         if(reposition){CaptureTarget();PlaceCard();}
         Show();TopMost=true;Native.ShowWindow(Handle,4);Native.SetWindowPos(Handle,new IntPtr(-1),Left,Top,0,0,0x0010|0x0001|0x0040);Invalidate();
     }
-    void BindHotkey(){Native.UnregisterHotKey(Handle,1);registered=Native.RegisterHotKey(Handle,1,0x4002,0x52);if(!registered&&status!=null)SetState("Ctrl+R 已被占用","仍可点击麦克风；关闭冲突工具后重启");}
+    void UpdateShortcutHints(){
+        shortcutLabel.Text=ShortcutText;shortcutLabel.AccessibleName="开始或结束录音："+ShortcutText;
+        tray.Text="小纳森 · "+((recording||busy?recordEnglish:config.EnglishOutput)?"中→英":"中文")+" · "+ShortcutText;
+        compactTip.SetToolTip(this,"小纳森 · "+ShortcutText+" 开始录音\n录音中 T 切换语言；按住 Alt 操作浮窗");
+        if(ContextMenuStrip!=null&&ContextMenuStrip.Items.Count>0)ContextMenuStrip.Items[0].Text="点击录音 / "+ShortcutText;
+    }
+    void BindHotkey(){uint mods,key;string text;if(!RecordingHotkey.Parse(ShortcutText,out mods,out key,out text))return;Native.UnregisterHotKey(Handle,activeHotkeyId);registered=Native.RegisterHotKey(Handle,activeHotkeyId,mods|0x4000,key);if(!registered&&status!=null)SetState("快捷键已被占用",ShortcutText+" 不可用，可从托盘设置中修改");}
+    bool ChangeRecordingShortcut(string requested,out string error){
+        error="";uint mods,key;string text;
+        if(!RecordingHotkey.Parse(requested,out mods,out key,out text)){error="请使用 Ctrl 或 Alt 加字母、数字、功能键或空格等组合。";return false;}
+        if(recording||busy){error="请先结束当前录音或处理。";return false;}
+        if(text==ShortcutText&&registered)return true;
+        int pending=activeHotkeyId==1?3:1;
+        if(!Native.RegisterHotKey(Handle,pending,mods|0x4000,key)){error=text+" 已被其他程序占用或被系统保留，请换一个组合。原快捷键仍然有效。";return false;}
+        string old=ShortcutText;config.RecordingShortcut=text;
+        try{config.Save();}catch(Exception ex){config.RecordingShortcut=old;Native.UnregisterHotKey(Handle,pending);Program.Log(ex);error="设置未能保存，已保留原快捷键。";return false;}
+        if(registered)Native.UnregisterHotKey(Handle,activeHotkeyId);activeHotkeyId=pending;registered=true;
+        UpdateMode();ClearSnapshot();ScheduleCollapse();return true;
+    }
+    public void ExerciseRecordingHotkeyForTest(){
+        timer.Stop();string path=Path.Combine(Program.Home,"settings.json");byte[] before=File.Exists(path)?File.ReadAllBytes(path):null;
+        uint mods,key;string normalized,error;
+        if(!RecordingHotkey.Parse(" control + shift + e ",out mods,out key,out normalized)||mods!=6||key!=0x45||normalized!="Ctrl+Shift+E")throw new Exception("Shortcut normalization failed");
+        foreach(string bad in new[]{"T","Shift+T","Ctrl+Ctrl+E","Win+E","Ctrl+ControlKey","Ctrl+999"})if(RecordingHotkey.Parse(bad,out mods,out key,out normalized))throw new Exception("Invalid shortcut accepted: "+bad);
+        try{using(var probe=new Form()){
+            IntPtr handle=probe.Handle;
+            Action<string,bool> available=(value,wanted)=>{uint m,k;string n;RecordingHotkey.Parse(value,out m,out k,out n);bool obtained=Native.RegisterHotKey(handle,88,m|0x4000,k);if(obtained)Native.UnregisterHotKey(handle,88);if(obtained!=wanted)throw new Exception("Unexpected registration availability: "+value);};
+            if(!ChangeRecordingShortcut("Ctrl+E",out error))throw new Exception(error);available("Ctrl+E",false);
+            if(!ChangeRecordingShortcut("Ctrl+Shift+F9",out error))throw new Exception(error);available("Ctrl+E",true);available("Ctrl+Shift+F9",false);
+            if(Settings.Load().RecordingShortcut!="Ctrl+Shift+F9"||shortcutLabel.Text!="Ctrl+Shift+F9")throw new Exception("Saved shortcut or label did not update");
+            if(!Native.RegisterHotKey(handle,89,0x4006,0x79))throw new Exception("Conflict probe could not reserve Ctrl+Shift+F10");
+            try{if(ChangeRecordingShortcut("Ctrl+Shift+F10",out error)||string.IsNullOrWhiteSpace(error)||ShortcutText!="Ctrl+Shift+F9")throw new Exception("Conflict did not preserve old shortcut");available("Ctrl+Shift+F9",false);}finally{Native.UnregisterHotKey(handle,89);}
+            File.SetAttributes(path,File.GetAttributes(path)|FileAttributes.ReadOnly);
+            try{if(ChangeRecordingShortcut("Ctrl+E",out error)||ShortcutText!="Ctrl+Shift+F9")throw new Exception("Failed save changed shortcut");available("Ctrl+E",true);available("Ctrl+Shift+F9",false);}finally{File.SetAttributes(path,File.GetAttributes(path)&~FileAttributes.ReadOnly);}
+            if(!ChangeRecordingShortcut("Ctrl+E",out error))throw new Exception(error);ShowSettings();Close();available("Ctrl+E",true);
+            File.WriteAllText(Path.Combine(Program.Home,"hotkey-test.txt"),"Default Ctrl+E registration: PASS\nCustom combo and immediate rebinding: PASS\nPrevious combo released: PASS\nSaved preference and visible label: PASS\nInvalid combos rejected: PASS\nConflict preserves previous shortcut: PASS\nSave failure rolls back registration and preference: PASS\nClose releases shortcut: PASS\n");
+        }}finally{if(before!=null)File.WriteAllBytes(path,before);}
+    }
     protected override void OnHandleCreated(EventArgs e){base.OnHandleCreated(e);if(!Program.UiTest)BindHotkey();if(recording)BindLanguageKey();}
-    protected override void OnHandleDestroyed(EventArgs e){ReleaseLanguageKey();if(registered){Native.UnregisterHotKey(Handle,1);registered=false;}base.OnHandleDestroyed(e);}
-    protected override void WndProc(ref Message m){if(m.Msg==0x312){if(m.WParam==new IntPtr(2)){HandleLanguageKey();return;}if(m.WParam==new IntPtr(1)){if(appearanceOpen||settingsOpen)return;BeginInvoke(new Action(async()=>{ShowPanel(!recording&&!busy);await Toggle();}));return;}}base.WndProc(ref m);}
+    protected override void OnHandleDestroyed(EventArgs e){ReleaseLanguageKey();if(registered){Native.UnregisterHotKey(Handle,activeHotkeyId);registered=false;}base.OnHandleDestroyed(e);}
+    protected override void WndProc(ref Message m){if(m.Msg==0x312){if(m.WParam==new IntPtr(2)){HandleLanguageKey();return;}if(m.WParam==new IntPtr(activeHotkeyId)){if(!registered||appearanceOpen||settingsOpen)return;BeginInvoke(new Action(async()=>{ShowPanel(!recording&&!busy);await Toggle();}));return;}}base.WndProc(ref m);}
     async Task Tick(){
         if(closing)return;
         if(!Program.UiTest){bool alt=(Native.GetAsyncKeyState(0x12)&0x8000)!=0;SetInteraction(alt);if(alt&&!compact)ScheduleCollapse();}
@@ -579,11 +634,11 @@ class DictationForm : Form {
             if(peak>0.009f)lastSound=DateTime.UtcNow;
             int seconds=(int)(DateTime.UtcNow-recordStart).TotalSeconds;
             status.Text=(DateTime.UtcNow-lastSound).TotalSeconds<1.4?"已听到你的声音":"正在聆听";
-            detail.Text=seconds+" 秒 · "+((DateTime.UtcNow-lastSound).TotalSeconds>3?"暂无声音":"Ctrl+R 结束")+" · "+(languageKeyRegistered?"T 切换":"T 已占用，Alt 点语言");
+            detail.Text=seconds+" 秒 · "+((DateTime.UtcNow-lastSound).TotalSeconds>3?"暂无声音":ShortcutText+" 结束")+" · "+(languageKeyRegistered?"T 切换":"T 已占用，Alt 点语言");
             if(seconds>=90)await Toggle();
         }
         if(!compact||recording||busy)wave.Animate();
-        if(!busy&&!recording&&engine.Loaded&&(DateTime.UtcNow-engine.LastUse).TotalSeconds>=Math.Max(5,config.UnloadSeconds)){engine.Stop();SetState(config.EnglishOutput?"中文说，英文写":"随时开始说话","模型已释放 · Ctrl+R 录音");}
+        if(!busy&&!recording&&engine.Loaded&&(DateTime.UtcNow-engine.LastUse).TotalSeconds>=Math.Max(5,config.UnloadSeconds)){engine.Stop();SetState(config.EnglishOutput?"中文说，英文写":"随时开始说话","模型已释放 · Ctrl+E 录音");}
     }
     async Task LivePreview(CancellationToken token){
         try{
@@ -602,30 +657,30 @@ class DictationForm : Form {
     static double Energy(byte[] pcm){double sum=0;for(int i=0;i+1<pcm.Length;i+=2){double v=(short)(pcm[i]|(pcm[i+1]<<8))/32768.0;sum+=v*v;}return pcm.Length<2?0:Math.Sqrt(sum/(pcm.Length/2));}
     async Task StopPreview(){if(liveCancel!=null)liveCancel.Cancel();try{if(liveTask!=null)await liveTask;}catch(OperationCanceledException){}finally{liveTask=null;if(liveCancel!=null){liveCancel.Dispose();liveCancel=null;}}}
     async Task Toggle(){
-        if(closing)return;ShowPanel(!recording&&!busy);if(busy){SetState("正在处理","完成后再按 Ctrl+R 开始新录音");return;}
+        if(closing)return;ShowPanel(!recording&&!busy);if(busy){SetState("正在处理","完成后再按 Ctrl+E 开始新录音");return;}
         if(!recording){
             try{
                 CaptureTarget();recordEnglish=config.EnglishOutput;operation=new CancellationTokenSource();audio=new AudioCapture();audio.Start(config.Microphone);recording=true;BindLanguageKey();UpdateMode();recordStart=DateTime.UtcNow;lastSound=DateTime.UtcNow.AddSeconds(-3);visualLevel=0;
-                preview.Text="";previewTitle.Text="实时预览 · 文字会逐步出现";copy.Visible=false;Expand(true);microphone.Text="■";microphone.Listening=true;wave.Listening=true;wave.Thinking=false;timer.Interval=40;SetState("正在聆听","再按 Ctrl+R 结束并整理");
+                preview.Text="";previewTitle.Text="实时预览 · 文字会逐步出现";copy.Visible=false;Expand(true);microphone.Text="■";microphone.Listening=true;wave.Listening=true;wave.Thinking=false;timer.Interval=40;SetState("正在聆听","再按 Ctrl+E 结束并整理");
                 warming=engine.Ready(operation.Token);liveCancel=CancellationTokenSource.CreateLinkedTokenSource(operation.Token);liveTask=LivePreview(liveCancel.Token);
             }catch(Exception ex){ReleaseLanguageKey();if(audio!=null){audio.Dispose();audio=null;}if(operation!=null){operation.Dispose();operation=null;}recording=false;UpdateMode();ScheduleCollapse();Program.Log(ex);SetState("无法开始录音",ex.Message);}return;
         }
         recording=false;ReleaseLanguageKey();busy=true;UpdateMode();microphone.Text="…";microphone.Listening=false;wave.Listening=false;wave.Thinking=true;timer.Interval=80;IntPtr destination=target;
         try{
             byte[] pcm=audio.Stop();audio.Dispose();audio=null;SetState("正在识别","结束录音，整理后填入原输入框");await StopPreview();await warming;
-            if(pcm.Length<6400){SetState("录音太短","按 Ctrl+R 再试一次");return;}
+            if(pcm.Length<6400){SetState("录音太短","按 Ctrl+E 再试一次");return;}
             if(Energy(pcm)<0.0008){SetState("没有收到声音","检查麦克风连接，或在设置中更换");return;}
             string raw=Vocabulary.Canonical(await engine.Transcribe(AudioCapture.Wave(pcm),operation.Token));
-            if(string.IsNullOrWhiteSpace(raw)){SetState("未识别到内容","按 Ctrl+R 再试一次");return;}
+            if(string.IsNullOrWhiteSpace(raw)){SetState("未识别到内容","按 Ctrl+E 再试一次");return;}
             preview.Text=raw;string text=raw;
             if(config.Polish){SetState("正在整理","去口水词、重复，保留专有名词");try{text=Vocabulary.Canonical(await engine.Polish(raw,operation.Token));}catch(OperationCanceledException){throw;}catch(Exception ex){Program.Log(ex);SetState("整理暂不可用","保留原始识别结果");}}
             preview.Text=text;
             if(recordEnglish){previewTitle.Text="中文原文 · 正在翻译";SetState("正在翻译成英文","保留含义、数字与专有名词");text=await engine.Translate(text,operation.Token);}
             preview.Text=text;previewTitle.Text=recordEnglish?"英文译文":"整理结果";copy.Visible=true;
-            if(config.AutoPaste&&Native.IsWindow(destination)&&Native.GetForegroundWindow()==destination){bool pasted=await Paste(text,destination);SetState(pasted?"已填入输入框":"文字已准备好",pasted?"Ctrl+R 继续 · 回车发送由你操作":"输入窗口已切换，点击复制后粘贴");}
+            if(config.AutoPaste&&Native.IsWindow(destination)&&Native.GetForegroundWindow()==destination){bool pasted=await Paste(text,destination);SetState(pasted?"已填入输入框":"文字已准备好",pasted?"Ctrl+E 继续 · 回车发送由你操作":"输入窗口已切换，点击复制后粘贴");}
             else SetState("文字已准备好","点击复制，在输入框粘贴");
             Expand(true);
-        }catch(OperationCanceledException){if(!closing)SetState("已取消","按 Ctrl+R 重新开始");}
+        }catch(OperationCanceledException){if(!closing)SetState("已取消","按 Ctrl+E 重新开始");}
         catch(Exception ex){Program.Log(ex);if(!closing){SetState(recordEnglish?"英文翻译未完成":"这次识别未完成",ex.Message);if(recordEnglish&&!string.IsNullOrWhiteSpace(preview.Text)){previewTitle.Text="中文原文 · 可复制后重试";copy.Visible=true;}}}
         finally{busy=false;warming=null;microphone.Text="●";microphone.Listening=false;wave.Listening=false;wave.Thinking=false;wave.Level=0;microphone.Invalidate();timer.Interval=200;if(operation!=null){operation.Dispose();operation=null;}engine.LastUse=DateTime.UtcNow;ScheduleCollapse();}
     }
@@ -633,7 +688,7 @@ class DictationForm : Form {
         if(busy){if(operation!=null)operation.Cancel();return;}if(!recording)return;
         recording=false;ReleaseLanguageKey();busy=true;UpdateMode();if(operation!=null)operation.Cancel();if(audio!=null){audio.Dispose();audio=null;}
         try{await StopPreview();if(warming!=null)await warming;}catch(OperationCanceledException){}catch(Exception ex){Program.Log(ex);}
-        finally{warming=null;busy=false;microphone.Text="●";microphone.Listening=false;wave.Listening=false;wave.Thinking=false;wave.Level=0;microphone.Invalidate();timer.Interval=200;SetState("录音已取消","按 Ctrl+R 重新开始");if(operation!=null){operation.Dispose();operation=null;}}
+        finally{warming=null;busy=false;microphone.Text="●";microphone.Listening=false;wave.Listening=false;wave.Thinking=false;wave.Level=0;microphone.Invalidate();timer.Interval=200;SetState("录音已取消","按 Ctrl+E 重新开始");if(operation!=null){operation.Dispose();operation=null;}}
     }
     async Task<bool> Paste(string text,IntPtr destination){IDataObject old=null;try{old=Clipboard.GetDataObject();}catch{}Clipboard.SetText(text);if(Native.GetForegroundWindow()!=destination)return false;SendKeys.SendWait("^v");await Task.Delay(1000);try{if(Clipboard.ContainsText()&&Clipboard.GetText()==text){if(old!=null)Clipboard.SetDataObject(old,true);else Clipboard.Clear();}}catch{}return true;}
     Rectangle PlacementArea(){var screen=config.Look.Screen=="Primary"?Screen.PrimaryScreen:target!=IntPtr.Zero&&Native.IsWindow(target)?Screen.FromHandle(target):Screen.FromPoint(Cursor.Position);return screen.WorkingArea;}
@@ -647,7 +702,7 @@ class DictationForm : Form {
                 Rectangle baseRect=originalBounds[control];control.Bounds=new Rectangle((int)(baseRect.X*cardScale),(int)(baseRect.Y*cardScale),(int)(baseRect.Width*cardScale),(int)(baseRect.Height*cardScale));
                 float size=originalFonts[control]*cardScale;if(Math.Abs(control.Font.Size-size)>0.02f){Font old;var font=new Font(control.Font.FontFamily,Math.Max(7,size),control.Font.Style);control.Font=font;if(ownedFonts.TryGetValue(control,out old))old.Dispose();ownedFonts[control]=font;}
                 control.BackColor=bg;control.ForeColor=fg;var button=control as PillButton;if(button!=null){button.Accent=accent;button.ForeColor=muted;button.Invalidate();}
-                if(control is Label&&control.Text=="Ctrl+R")control.ForeColor=muted;
+                if(control==shortcutLabel)control.ForeColor=muted;
             }
             title.ForeColor=accent;status.ForeColor=fg;detail.ForeColor=muted;previewTitle.ForeColor=muted;preview.BackColor=surface;preview.ForeColor=fg;microphone.ForeColor=fg;wave.Accent=accent;mode.ForeColor=config.EnglishOutput?accent:muted;
             Opacity=value.Opacity/100d;SetInteraction(false);SnapShape();if(reposition)PlaceCard();wave.Invalidate();Invalidate(true);
@@ -671,35 +726,41 @@ class DictationForm : Form {
     }
 
     void ShowSettings(){
-        if(busy||recording){SetState("先结束当前录音","再按 Ctrl+R 结束，即可修改设置");return;}
-        if(settingsOpen||appearanceOpen)return;settingsOpen=true;try{using(var form=new Form{Text="小纳森设置",Size=new Size(472,616),StartPosition=FormStartPosition.CenterScreen,FormBorderStyle=FormBorderStyle.FixedDialog,MaximizeBox=false,MinimizeBox=false,Font=Font}){
+        if(busy||recording){SetState("先结束当前录音","再按 Ctrl+E 结束，即可修改设置");return;}
+        if(settingsOpen||appearanceOpen)return;settingsOpen=true;try{using(var form=new Form{Text="小纳森设置",Size=new Size(472,696),StartPosition=FormStartPosition.CenterScreen,FormBorderStyle=FormBorderStyle.FixedDialog,MaximizeBox=false,MinimizeBox=false,Font=Font}){
             form.Controls.Add(new Label{Text="麦克风",Location=new Point(20,17),AutoSize=true});
             var choices=new ComboBox{Location=new Point(20,42),Width=412,DropDownStyle=ComboBoxStyle.DropDownList};choices.Items.Add("系统默认");foreach(string d in AudioCapture.Devices())choices.Items.Add(d);choices.SelectedIndex=0;for(int i=1;i<choices.Items.Count;i++)if(!string.IsNullOrWhiteSpace(config.Microphone)&&choices.Items[i].ToString().IndexOf(config.Microphone,StringComparison.OrdinalIgnoreCase)>=0){choices.SelectedIndex=i;break;}form.Controls.Add(choices);
             var polish=new CheckBox{Text="轻度整理：去口水词、重复和说错重说",Location=new Point(20,85),AutoSize=true,Checked=config.Polish};form.Controls.Add(polish);
             var paste=new CheckBox{Text="整理后自动填入原输入框（不按回车）",Location=new Point(20,120),AutoSize=true,Checked=config.AutoPaste};form.Controls.Add(paste);
             var english=new CheckBox{Text="说完中文后翻译成英文",Location=new Point(20,155),AutoSize=true,Checked=config.EnglishOutput};form.Controls.Add(english);
             form.Controls.Add(new Label{Text="空闲卸载模型（秒）",Location=new Point(20,200),AutoSize=true});var seconds=new NumericUpDown{Minimum=5,Maximum=300,Value=Math.Max(5,Math.Min(300,config.UnloadSeconds)),Location=new Point(193,196),Width=70};form.Controls.Add(seconds);
-            form.Controls.Add(new Label{Text="英文与专有名词 · 每行一个，可直接修改",Location=new Point(20,241),AutoSize=true});
-            var terms=new TextBox{Multiline=true,ScrollBars=ScrollBars.Vertical,Location=new Point(20,268),Size=new Size(412,210),Text=File.Exists(Vocabulary.FilePath)?File.ReadAllText(Vocabulary.FilePath,Encoding.UTF8):""};form.Controls.Add(terms);
-            form.Controls.Add(new Label{Text="Ctrl+R：开始 / 停止 · 预览每几秒更新\n录音只在本机内存中处理。",Location=new Point(20,497),Size=new Size(412,40)});
-            var save=new Button{Text="保存",Location=new Point(342,546),Size=new Size(90,28)};form.Controls.Add(save);save.Click+=(s,e)=>{config.Microphone=choices.SelectedIndex==0?"":choices.SelectedItem.ToString();config.Polish=polish.Checked;config.AutoPaste=paste.Checked;config.EnglishOutput=english.Checked;config.UnloadSeconds=(int)seconds.Value;config.Save();UpdateMode();File.WriteAllText(Vocabulary.FilePath,terms.Text,new UTF8Encoding(false));form.Close();};form.ShowDialog();
+            form.Controls.Add(new Label{Text="开始 / 结束录音快捷键",Location=new Point(20,238),AutoSize=true});
+            var shortcut=new TextBox{ReadOnly=true,Text=ShortcutText,Location=new Point(225,234),Width=207,AccessibleName="录音快捷键，点击后按新组合键"};form.Controls.Add(shortcut);
+            var shortcutHelp=new Label{Text="先点击右侧输入框，再按 Ctrl / Alt 加其他键。保存后立即生效。",Location=new Point(20,269),Size=new Size(412,40)};form.Controls.Add(shortcutHelp);
+            shortcut.KeyDown+=(s,e)=>{e.SuppressKeyPress=true;e.Handled=true;if(e.KeyCode==Keys.ControlKey||e.KeyCode==Keys.ShiftKey||e.KeyCode==Keys.Menu)return;uint mods,key;string text;string combination=(e.Control?"Ctrl+":"")+(e.Alt?"Alt+":"")+(e.Shift?"Shift+":"")+e.KeyCode;if(RecordingHotkey.Parse(combination,out mods,out key,out text)){shortcut.Text=text;shortcutHelp.Text="保存后立即生效。录音时仍可单独按 T 切换中文 / 中→英。";}else shortcutHelp.Text="请使用 Ctrl 或 Alt 加字母、数字、F1–F24、空格等组合。";};
+            form.Controls.Add(new Label{Text="英文与专有名词 · 每行一个，可直接修改",Location=new Point(20,321),AutoSize=true});
+            var terms=new TextBox{Multiline=true,ScrollBars=ScrollBars.Vertical,Location=new Point(20,348),Size=new Size(412,210),Text=File.Exists(Vocabulary.FilePath)?File.ReadAllText(Vocabulary.FilePath,Encoding.UTF8):""};form.Controls.Add(terms);
+            form.Controls.Add(new Label{Text=ShortcutText+"：开始 / 停止 · 预览每几秒更新\n录音只在本机内存中处理。",Location=new Point(20,577),Size=new Size(412,40)});
+            var save=new Button{Text="保存",Location=new Point(342,626),Size=new Size(90,28)};form.Controls.Add(save);save.Click+=(s,e)=>{try{string error;if(!ChangeRecordingShortcut(shortcut.Text,out error)){MessageBox.Show(form,error,"快捷键未修改",MessageBoxButtons.OK,MessageBoxIcon.Information);return;}config.Microphone=choices.SelectedIndex==0?"":choices.SelectedItem.ToString();config.Polish=polish.Checked;config.AutoPaste=paste.Checked;config.EnglishOutput=english.Checked;config.UnloadSeconds=(int)seconds.Value;config.Save();UpdateMode();File.WriteAllText(Vocabulary.FilePath,terms.Text,new UTF8Encoding(false));form.Close();}catch(Exception ex){Program.Log(ex);MessageBox.Show(form,"保存失败，请重试："+ex.Message,"设置未保存",MessageBoxButtons.OK,MessageBoxIcon.Warning);}};
+            if(Program.UiTest)form.Shown+=(s,e)=>form.BeginInvoke(new Action(()=>{using(var bitmap=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(bitmap,new Rectangle(Point.Empty,form.Size));bitmap.Save(Path.Combine(Program.Home,"settings-preview.png"),System.Drawing.Imaging.ImageFormat.Png);}form.Close();}));
+            form.ShowDialog();
         }}finally{settingsOpen=false;ScheduleCollapse();}
     }
     void SavePreview(){using(var bitmap=new Bitmap(Width,Height)){DrawToBitmap(bitmap,new Rectangle(Point.Empty,Size));bitmap.Save(Path.Combine(Program.Home,Program.UiSample?"live-preview.png":"preview.png"),System.Drawing.Imaging.ImageFormat.Png);}}
-    protected override void OnFormClosing(FormClosingEventArgs e){closing=true;ReleaseLanguageKey();timer.Stop();morphTimer.Stop();morphTimer.Dispose();ClearSnapshot();compactTip.Dispose();if(coffeeLogo!=null)coffeeLogo.Dispose();if(registered)Native.UnregisterHotKey(Handle,1);if(operation!=null)operation.Cancel();if(liveCancel!=null)liveCancel.Cancel();if(audio!=null){audio.Dispose();audio=null;}engine.Dispose();tray.Visible=false;tray.Dispose();if(appIcon!=null)appIcon.Dispose();base.OnFormClosing(e);}
+    protected override void OnFormClosing(FormClosingEventArgs e){closing=true;ReleaseLanguageKey();timer.Stop();morphTimer.Stop();morphTimer.Dispose();ClearSnapshot();compactTip.Dispose();if(coffeeLogo!=null)coffeeLogo.Dispose();if(registered)Native.UnregisterHotKey(Handle,activeHotkeyId);if(operation!=null)operation.Cancel();if(liveCancel!=null)liveCancel.Cancel();if(audio!=null){audio.Dispose();audio=null;}engine.Dispose();tray.Visible=false;tray.Dispose();if(appIcon!=null)appIcon.Dispose();base.OnFormClosing(e);}
 }
 
 static class Test {
     public static async Task Translation(){
         var result=new StringBuilder();using(var engine=new Engine(Settings.Load())){
             await engine.Ready(CancellationToken.None);
-            int index=0;foreach(string source in new[]{"我们明天下午四点开会，请提前十分钟到。","我想在 VS Code 中测试 ChatGPT API，然后把结果上传到 GitHub。","我不想取消订单，只想把数量从三个改成五个。","你能在周五之前给我发一份报告吗？","你好，我们正在开发一个 Windows 11 语音输入工具，希望用 Ctrl+R 开始录音，并在说话时预览文字。请在 VS Code 里测试 ChatGPT API，然后把结果上传到 GitHub。我们不需要自动发送消息，只需要把整理好的英文填进输入框。明天下午四点开会，请提前十分钟到。如果耳机麦克风没有声音，请先检查设置，不要删除用户的录音。订单数量是五个，每个价格129元。"}){
+            int index=0;foreach(string source in new[]{"我们明天下午四点开会，请提前十分钟到。","我想在 VS Code 中测试 ChatGPT API，然后把结果上传到 GitHub。","我不想取消订单，只想把数量从三个改成五个。","你能在周五之前给我发一份报告吗？","你好，我们正在开发一个 Windows 11 语音输入工具，希望用 Ctrl+E 开始录音，并在说话时预览文字。请在 VS Code 里测试 ChatGPT API，然后把结果上传到 GitHub。我们不需要自动发送消息，只需要把整理好的英文填进输入框。明天下午四点开会，请提前十分钟到。如果耳机麦克风没有声音，请先检查设置，不要删除用户的录音。订单数量是五个，每个价格129元。"}){
                 var watch=Stopwatch.StartNew();string english=await engine.Translate(source,CancellationToken.None);result.AppendLine(source);result.AppendLine(english);result.AppendLine(watch.Elapsed.TotalSeconds.ToString("F2")+"s");
                 if(index==0&&(!Regex.IsMatch(english,@"(?i)(4|four)")||!Regex.IsMatch(english,@"(?i)(10|ten)")))throw new Exception("Meeting time or advance notice lost");
                 if(index==1&&(!english.Contains("ChatGPT")||!english.Contains("VS Code")||!english.Contains("GitHub")))throw new Exception("Technical names lost");
                 if(index==2&&(!Regex.IsMatch(english,@"(?i)(don't|do not|not|won't)")||!Regex.IsMatch(english,@"(?i)(3|three)")||!Regex.IsMatch(english,@"(?i)(5|five)")))throw new Exception("Negation or quantities lost");
                 if(index==3&&!english.Trim().EndsWith("?"))throw new Exception("Question translated as an answer");
-                if(index==4&&(!english.Contains("129")||!english.Contains("Ctrl+R")||!english.Contains("GitHub")))throw new Exception("Long dictation details lost");index++;
+                if(index==4&&(!english.Contains("129")||!english.Contains("Ctrl+E")||!english.Contains("GitHub")))throw new Exception("Long dictation details lost");index++;
             }
         }File.WriteAllText(Path.Combine(Program.Home,"translation-test.txt"),result.ToString(),new UTF8Encoding(false));
     }

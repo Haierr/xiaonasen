@@ -10,11 +10,12 @@
 | --- | --- |
 | `--appearance-test` | Themes, HEX, opacity, scale, anchoring, cancel restoration, range validation |
 | `--compact-test` | Circle, animations, five-second idle collapse, recording/processing visibility, rapid reversal, retained results |
+| `--hotkey-test` | Ctrl+E, immediate rebinding, old-key release, persistence, invalid combinations, conflict/save-failure rollback, exit cleanup |
 | `--language-key-test` | Recording-only T, both output modes, session/preference consistency, Chinese preview retention, ignored queued events, 30 registration cycles, cancel/exit cleanup |
 
 Windows CI runs these without models, microphone access, or typing into other apps.
 
-`-Interactive` adds `--window-test`: Ctrl+R, repeated showing, input focus, mouse pass-through for both overlay states, Alt interaction, and full-opacity pass-through. Exit the running app and use an interactive desktop.
+`-Interactive` adds `--window-test`: Ctrl+E, repeated showing, input focus, mouse pass-through for both overlay states, Alt interaction, and full-opacity pass-through. Exit the running app and use an interactive desktop.
 
 `-Stress` adds 40 complete animation cycles and 10 rapid reversals after warmup. It checks private memory, GDI/USER objects, bitmaps, and timers. The test message pump adds overhead; its frame count does not measure desktop refresh rate.
 

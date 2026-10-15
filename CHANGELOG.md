@@ -1,5 +1,19 @@
 # 更新记录
 
+## 1.2.0
+
+- 默认录音快捷键改为 Ctrl+E。
+- 设置中可直接按键自定义录音快捷键，保存后立即生效。
+- 快捷键占用或保存失败时保留原组合，界面提示随设置更新。
+- 增加 Windows 快捷键注册、切换、持久化和失败回滚检查。
+
+### English
+
+- Change the default recording shortcut to Ctrl+E.
+- Capture a custom recording shortcut in Settings and apply it immediately on save.
+- Preserve the previous combination on conflicts or save failures; update shortcut hints throughout the UI.
+- Add Windows registration, rebinding, persistence, and rollback checks.
+
 ## 1.1.1
 
 首个公开发行版。
